@@ -2,19 +2,21 @@ PROJDIRS := kernel # user
 
 .PHONY: test iso clean $(PROJDIRS)
 
-test: kernel.bin
-	qemu-system-i386 -kernel kernel.bin
+test: PZOS.bin
+	qemu-system-i386 -kernel PZOS.bin
 
-test-iso: kernel.iso
-	# qemu-system-i386 -drive format=raw,file=kernel.iso -boot order=c
-	qemu-system-i386 -cdrom kernel.iso
+test-iso: PZOS.iso
+	# qemu-system-i386 -drive format=raw,file=PZOS.iso -boot order=c
+	qemu-system-i386 -cdrom PZOS.iso
 
-kernel.iso: kernel.bin
-	cp kernel.bin isodir/boot/kernel.bin
-	grub-mkrescue -o kernel.iso isodir
+iso: PZOS.iso
 
-kernel.bin: $(PROJDIRS)
-	i686-elf-gcc -T linker.ld -o kernel.bin -ffreestanding -O2 -nostdlib \
+PZOS.iso: PZOS.bin
+	cp PZOS.bin isodir/boot/PZOS.bin
+	grub-mkrescue -o PZOS.iso isodir
+
+PZOS.bin: $(PROJDIRS)
+	i686-elf-gcc -T linker.ld -o PZOS.bin -ffreestanding -O2 -nostdlib \
 		$(foreach dir, $(PROJDIRS), $(wildcard $(dir)/*.o)) -lgcc
 
 $(PROJDIRS):
@@ -24,5 +26,5 @@ clean:
 	for dir in $(PROJDIRS); do \
 		$(MAKE) -C $$dir clean; \
 	done
-	rm -f *.bin
-	rm isodir/boot/kernel.bin
+	rm -f *.bin *.iso
+	rm -f isodir/boot/PZOS.bin
