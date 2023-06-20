@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "cross",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/opt/cross/lib/gcc/i686-elf/13.1.0/include/",
+                "/opt/cross/lib/gcc/i686-elf/13.1.0/include/**"
+            ],
+            "defines": ["_INTELLISENSE_","__STDC_HOSTED__=0"],
+            "intelliSenseMode": "gcc-x86"
+        }
+    ],
+    "version": 4
+}
