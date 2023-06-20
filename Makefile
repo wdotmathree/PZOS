@@ -1,9 +1,17 @@
 PROJDIRS := kernel # user
 
-.PHONY: clean
+.PHONY: test iso clean $(PROJDIRS)
 
 test: kernel.bin
-	qemu-system-x86_64 -kernel kernel.bin
+	qemu-system-i386 -kernel kernel.bin
+
+test-iso: kernel.iso
+	# qemu-system-i386 -drive format=raw,file=kernel.iso -boot order=c
+	qemu-system-i386 -cdrom kernel.iso
+
+kernel.iso: kernel.bin
+	cp kernel.bin isodir/boot/kernel.bin
+	grub-mkrescue -o kernel.iso isodir
 
 kernel.bin: $(PROJDIRS)
 	i686-elf-gcc -T linker.ld -o kernel.bin -ffreestanding -O2 -nostdlib \
@@ -17,5 +25,3 @@ clean:
 		$(MAKE) -C $$dir clean; \
 	done
 	rm -f *.bin
-
-.PHONY: all clean $(PROJDIRS)
