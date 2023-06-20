@@ -25,3 +25,4 @@ clean:
 		$(MAKE) -C $$dir clean; \
 	done
 	rm -f *.bin
+	rm isodir/boot/kernel.bin
