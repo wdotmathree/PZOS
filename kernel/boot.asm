@@ -16,7 +16,7 @@ global _start:(_start.end - _start)
 
 _start:
 	mov esp, stack_top
-	
+
 	call kernel_main
 
 	cli

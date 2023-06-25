@@ -1,5 +1,10 @@
 {
 	"C_Cpp.clang_format_fallbackStyle": "{BasedOnStyle: LLVM, AccessModifierOffset: -4, FixNamespaceComments: false, NamespaceIndentation: All, IndentWidth: 4, TabWidth: 4, UseTab: Always, ColumnLimit: 160, AlignTrailingComments: false, AlignAfterOpenBracket: BlockIndent, AllowShortFunctionsOnASingleLine: Empty}",
 	"C_Cpp.default.cStandard": "gnu99",
-	"C_Cpp.default.compilerPath": "/opt/cross/bin/i686-elf-gcc"
+	"C_Cpp.default.compilerPath": "/opt/cross/bin/i686-elf-gcc",
+	"files.associations": {
+		"string.h": "c",
+		"stddef.h": "c",
+		"stdarg.h": "c"
+	}
 }
