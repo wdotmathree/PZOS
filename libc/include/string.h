@@ -1,5 +1,6 @@
-#ifndef _STRING_H
-#define _STRING_H 1
+#pragma once
+#ifndef STRING_H
+#define STRING_H
 
 #include <stddef.h>
 
@@ -17,4 +18,4 @@ size_t strlen(const char *);
 }
 #endif
 
-#endif // _STRING_H
+#endif

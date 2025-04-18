@@ -1,5 +1,6 @@
-#ifndef _TTY_H
-#define _TTY_H
+#pragma once
+#ifndef TTY_H
+#define TTY_H
 
 #include <stddef.h>
 
