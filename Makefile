@@ -1,4 +1,4 @@
-PROJDIRS := kernel
+PROJDIRS := boot kernel
 
 .PHONY: test-iso test iso PZOS.bin clean
 
