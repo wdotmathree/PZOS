@@ -5,29 +5,36 @@ LD := /opt/cross/i686-elf/bin/ld
 ASMSRCS := $(wildcard *.asm)
 CSRCS := $(wildcard *.c)
 SRCS := $(ASMSRCS) $(CSRCS)
-OBJS = $(ASMSRCS:.asm=.o) $(CSRCS:.c=.o)
+OBJS = $(ASMSRCS:.asm=_asm.o) $(CSRCS:.c=_c.o)
 
 ASFLAGS := -felf -gdwarf
+CFLAGS := -ffreestanding -O2
 
 .PHONY: all clean
 
 all: $(OBJS)
 	$(LD) -m elf_i386 -T link.ld -o boot.elf $(OBJS)
-	objcopy -S boot.elf boot.stripped.elf
-	objcopy -O binary boot.stripped.elf boot.bin
+	objcopy -S -O binary boot.elf boot.bin
 
+debug: CFLAGS += -g ; CFLAGS -= -O2
 debug: all
 	qemu-system-i386 -m 8G -drive file=boot.bin,format=raw -s -S
-	# gdb -ex "target remote :1234" -ex "file boot.elf" -ex "b stage2" -ex "c"
+	# gdb -ex "target remote :1234" -ex "file boot.elf" -ex "b boot1" -ex "c"
 
 test: all
 	qemu-system-i386 -m 8G -drive file=boot.bin,format=raw
 
-%.o: %.asm
+# Long mode
+boot2.c.o: boot2.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Real mode and others
+%_asm.o: %.asm
 	$(AS) $(ASFLAGS) $< -o $@
 
-%.o: %.c
-	$(CC) -c -m32 -ffreestanding -g -I. $< -o $@
+# Protected mode
+%_c.o: %.c
+	$(CC) $(CFLAGS) -m32 -c $< -o $@
 
 clean:
 	rm -f $(OBJS) boot.elf boot.bin

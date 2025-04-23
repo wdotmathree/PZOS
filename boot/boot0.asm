@@ -22,7 +22,6 @@ boot:
 
 	; Reset disk
 	mov ah, 0x00
-	mov dl, 0x80
 	int 0x13
 	jc error.reset
 
@@ -101,13 +100,10 @@ thunk:
 	; Fix stack
 	movzx esp, sp
 
-	call boot1
-	; If boot1 returns, we have an error
+	.loop:
+		call boot1
+		jmp .loop
 
-	.halt:
-	cli
-	hlt
-	jmp .halt
 BITS 16
 
 test_a20:
@@ -203,10 +199,10 @@ diskaddr:
 	.numb dw 1
 	.buf dd 0x00007e00
 	.lba dq 1
-read_msg: db "Disk read failed with error ", 0
 reset_msg: db "Disk reset failed with error ", 0
-a20_msg: db "Could not enable A20 line", 0
-mmap_msg: db "Could not get memory map", 0
+read_msg: db "Disk read failed with error ", 0
+a20_msg: db "Failed to enable A20 line", 0
+mmap_msg: db "Failed to get memory map", 0
 tmp_gdt:
 	.null dq 0
 	.top1 dw 0xffff, 0x0000
