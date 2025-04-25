@@ -25,7 +25,7 @@ test: all
 	qemu-system-i386 -m 8G -drive file=boot.bin,format=raw
 
 # Long mode
-boot2.c.o: boot2.c
+boot2_c.o: boot2.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Real mode and others
