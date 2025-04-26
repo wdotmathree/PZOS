@@ -8,7 +8,7 @@ SRCS := $(ASMSRCS) $(CSRCS)
 OBJS = $(ASMSRCS:.asm=_asm.o) $(CSRCS:.c=_c.o)
 
 ASFLAGS := -felf -gdwarf
-CFLAGS := -ffreestanding -O2
+CFLAGS := -ffreestanding -O2 -I../include/
 
 .PHONY: all clean
 

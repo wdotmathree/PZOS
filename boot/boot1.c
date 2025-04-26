@@ -1,4 +1,8 @@
-#include "boot1.h"
+#include <stddef.h>
+#include <stdint.h>
+#include <vga.h>
+
+extern void halt(void);
 
 static const size_t VGA_WIDTH = 80;
 static const size_t VGA_HEIGHT = 25;

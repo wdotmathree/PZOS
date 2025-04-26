@@ -6,8 +6,7 @@
                 "${workspaceFolder}/**",
                 "/opt/cross/lib/gcc/i686-elf/13.1.0/include/",
                 "/opt/cross/lib/gcc/i686-elf/13.1.0/include/**",
-                "${workspaceFolder}/libc/include/**",
-                "${workspaceFolder}/kernel/include/**"
+                "${workspaceFolder}/include/**"
             ],
             "defines": ["_INTELLISENSE_","__STDC_HOSTED__=0"],
             "intelliSenseMode": "gcc-x86"
