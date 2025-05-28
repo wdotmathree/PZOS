@@ -21,11 +21,15 @@ boot:
 	mov sp, 0x7c00
 
 	; Reset disk
+	; dl should be set by BIOS
 	mov ah, 0x00
 	int 0x13
 	jc error.reset
 
 	; Load rest of bootloader
+	mov ax, [diskaddr.numb]
+	shr ax, 9
+	mov [diskaddr.numb], ax
 	mov ah, 0x42
 	mov si, diskaddr
 	int 0x13
@@ -77,6 +81,11 @@ boot:
 		test bx, bx
 		jnz .mmap_loop
 	mov [0x0500], di
+
+	; Inform BIOS that we will be using both 32 and 64 bit mode
+	mov ax, 0xec00
+	mov bl, 3
+	int 0x15
 
 	; Load temporary GDT
 	lgdt [gdt_ref]
@@ -193,10 +202,12 @@ error:
 
 section .data
 
+extern _binary_end
+
 diskaddr:
 	.size db 0x10
 	.res db 0
-	.numb dw 1
+	.numb dw _binary_end - 0x7c00 - 1
 	.buf dd 0x00007e00
 	.lba dq 1
 reset_msg: db "Disk reset failed with error ", 0

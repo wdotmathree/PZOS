@@ -8,20 +8,23 @@ SRCS := $(ASMSRCS) $(CSRCS)
 OBJS = $(ASMSRCS:.asm=_asm.o) $(CSRCS:.c=_c.o)
 
 ASFLAGS := -felf -gdwarf
-CFLAGS := -ffreestanding -O2 -I../include/
+CFLAGS := -ffreestanding -I../include/ -mgeneral-regs-only -mno-red-zone
 
 .PHONY: all clean
+
+release: CFLAGS += -O2
+release: all
 
 all: $(OBJS)
 	$(LD) -m elf_i386 -T link.ld -o boot.elf $(OBJS)
 	objcopy -S -O binary boot.elf boot.bin
 
-debug: CFLAGS += -g ; CFLAGS -= -O2
+debug: CFLAGS += -g -Og
 debug: all
 	qemu-system-i386 -m 8G -drive file=boot.bin,format=raw -s -S
 	# gdb -ex "target remote :1234" -ex "file boot.elf" -ex "b boot1" -ex "c"
 
-test: all
+test: release
 	qemu-system-i386 -m 8G -drive file=boot.bin,format=raw
 
 # Long mode
