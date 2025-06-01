@@ -12,7 +12,7 @@ struct GateDescriptor32 {
 	uint16_t offset_hi;
 } __attribute__((packed));
 
-__attribute__((weak)) extern struct GateDescriptor32 idt32[];
+extern struct GateDescriptor32 idt32[];
 
 struct InterruptFrame32 {
 	uint32_t eflags;
@@ -25,8 +25,9 @@ extern const void const idtr32;
 char letters[] = "0123456789ABCDEF";
 
 void exception_handler(int num, int error) {
-	// terminal_initialize();
-	terminal_writestring("\nException: ");
+	terminal_initialize();
+	terminal_initialize();
+	terminal_writestring("Exception: ");
 
 	terminal_putchar(letters[(num >> 4) & 0xf]);
 	terminal_putchar(letters[(num >> 0) & 0xf]);
@@ -94,7 +95,7 @@ void boot1(void) {
 	outb(0x21, 0b11111011); // Cascade
 	outb(0xa1, 0b11111111); // None
 
-	// // Enable interrupts
+	// Enable interrupts
 	asm("sti");
 
 	terminal_initialize();
