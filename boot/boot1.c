@@ -1,37 +1,105 @@
+#include <intrin.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <tty.h>
 #include <vga.h>
 
-extern void halt(void);
+struct GateDescriptor32 {
+	uint16_t offset_lo;
+	uint16_t selector;
+	uint8_t _zero;
+	uint8_t type_attributes;
+	uint16_t offset_hi;
+} __attribute__((packed));
 
-static const size_t VGA_WIDTH = 80;
-static const size_t VGA_HEIGHT = 25;
-static uint16_t *const VGA_MEMORY = (uint16_t *)0xB8000;
+__attribute__((weak)) extern struct GateDescriptor32 idt32[];
 
-static size_t terminal_row;
-static size_t terminal_column;
-static uint8_t terminal_color;
-static uint16_t *terminal_buffer;
+struct InterruptFrame32 {
+	uint32_t eflags;
+	uint32_t cs;
+	uint32_t eip;
+} __attribute__((packed));
 
-void terminal_initialize(void) {
-	terminal_row = 0;
-	terminal_column = 0;
-	terminal_color = vga_entry_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
-	terminal_buffer = VGA_MEMORY;
-	for (size_t y = 0; y < VGA_HEIGHT; y++) {
-		for (size_t x = 0; x < VGA_WIDTH; x++) {
-			const size_t index = y * VGA_WIDTH + x;
-			terminal_buffer[index] = vga_entry(' ', terminal_color);
-		}
+extern const void const idtr32;
+
+char letters[] = "0123456789ABCDEF";
+
+void exception_handler(int num, int error) {
+	// terminal_initialize();
+	terminal_writestring("\nException: ");
+
+	terminal_putchar(letters[(num >> 4) & 0xf]);
+	terminal_putchar(letters[(num >> 0) & 0xf]);
+
+	terminal_writestring("\nError code: ");
+	terminal_putchar(letters[(error >> 12) & 0xf]);
+	terminal_putchar(letters[(error >> 8) & 0xf]);
+	terminal_putchar(letters[(error >> 4) & 0xf]);
+	terminal_putchar(letters[(error >> 0) & 0xf]);
+	terminal_writestring("\n");
+
+	while (1)
+		asm("hlt");
+}
+
+__attribute__((interrupt)) void master_null(struct InterruptFrame32 *frame) {
+	// Read ISR
+	outb(0x20, 0x0b);
+	// Only send EOI if there is an interrupt pending
+	if (inb(0x20))
+		outb(0x20, 0x20);
+}
+
+__attribute__((interrupt)) void slave_null(struct InterruptFrame32 *frame) {
+	// Read ISR
+	outb(0xa0, 0x0b);
+	// Only send EOI if there is an interrupt pending
+	if (inb(0xa0)) {
+		// Need to send EOI to both
+		outb(0xa0, 0x20);
+		outb(0x20, 0x20);
 	}
 }
 
 void boot1(void) {
+	outb(0x20, 0x11); // ICW1: Initialize with ICW4
+	io_wait();
+	outb(0xa0, 0x11); // ICW1: Initialize with ICW4
+	io_wait();
+	outb(0x21, 0x20); // ICW2: Remap master PIC to 0x20
+	io_wait();
+	outb(0xa1, 0x28); // ICW2: Remap slave PIC to 0x28
+	io_wait();
+	outb(0x21, 4); // ICW3: Cascade on IRQ2
+	io_wait();
+	outb(0xa1, 2); // ICW3: Cascade on IRQ2
+	io_wait();
+	outb(0x21, 0x01); // ICW4: 8086 mode
+	io_wait();
+	outb(0xa1, 0x01); // ICW4: 8086 mode
+	io_wait();
+
+	// Handle superious interrupts
+	idt32[0x20 + 14] = (struct GateDescriptor32){
+		.offset_lo = (uint16_t)((uintptr_t)master_null & 0xffff),
+		.selector = 0x08,
+		._zero = 0,
+		.type_attributes = 0x8e, // Present, ring 0, interrupt gate
+		.offset_hi = (uint16_t)(((uintptr_t)master_null >> 16) & 0xffff),
+	};
+
+	asm("lidt [%0]" : : "r"(&idtr32));
+
+	// Unmask needed interrupts
+	outb(0x21, 0b11111011); // Cascade
+	outb(0xa1, 0b11111111); // None
+
+	// // Enable interrupts
+	asm("sti");
+
 	terminal_initialize();
-	const char msg[] = "Hello, world!";
-	for (int i = 0; i < 14; i++)
-		terminal_buffer[i] = vga_entry(msg[i], terminal_color);
+	terminal_writestring("Hello, World!\n");
 
 	while (1)
-		halt();
+		asm("hlt");
 }

@@ -7,8 +7,8 @@ CSRCS := $(wildcard *.c)
 SRCS := $(ASMSRCS) $(CSRCS)
 OBJS = $(ASMSRCS:.asm=_asm.o) $(CSRCS:.c=_c.o)
 
-ASFLAGS := -felf -gdwarf
-CFLAGS := -ffreestanding -I../include/ -mgeneral-regs-only -mno-red-zone
+ASFLAGS := -f elf32 -gdwarf
+CFLAGS := -ffreestanding -I../include/ -mgeneral-regs-only -mno-red-zone -masm=intel
 
 .PHONY: all clean
 
@@ -16,7 +16,7 @@ release: CFLAGS += -O2
 release: all
 
 all: $(OBJS)
-	$(LD) -m elf_i386 -T link.ld -o boot.elf $(OBJS)
+	$(LD) -m elf_i386 -T link.ld -o boot.elf $(OBJS) -L../libc -lk
 	objcopy -S -O binary boot.elf boot.bin
 
 debug: CFLAGS += -g -Og
@@ -29,7 +29,7 @@ test: release
 
 # Long mode
 boot2_c.o: boot2.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	/opt/cross/bin/x86_64-elf-gcc $(CFLAGS) -c $< -o $@
 
 # Real mode and others
 %_asm.o: %.asm
@@ -37,7 +37,7 @@ boot2_c.o: boot2.c
 
 # Protected mode
 %_c.o: %.c
-	$(CC) $(CFLAGS) -m32 -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(OBJS) boot.elf boot.bin

@@ -1,4 +1,4 @@
-CC := i686-elf-gcc
+CC := /opt/cross/bin/i686-elf-gcc
 AS := nasm
 
 CSRCS := $(shell find . -name "*.c")
