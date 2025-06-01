@@ -62,7 +62,7 @@ __attribute__((interrupt)) void slave_null(struct InterruptFrame32 *frame) {
 	}
 }
 
-void boot1(void) {
+void boot2(void) {
 	outb(0x20, 0x11); // ICW1: Initialize with ICW4
 	io_wait();
 	outb(0xa0, 0x11); // ICW1: Initialize with ICW4
@@ -81,12 +81,19 @@ void boot1(void) {
 	io_wait();
 
 	// Handle superious interrupts
-	idt32[0x20 + 14] = (struct GateDescriptor32){
+	idt32[0x20 + 7] = (struct GateDescriptor32){
 		.offset_lo = (uint16_t)((uintptr_t)master_null & 0xffff),
 		.selector = 0x08,
 		._zero = 0,
 		.type_attributes = 0x8e, // Present, ring 0, interrupt gate
 		.offset_hi = (uint16_t)(((uintptr_t)master_null >> 16) & 0xffff),
+	};
+	idt32[0x20 + 15] = (struct GateDescriptor32){
+		.offset_lo = (uint16_t)((uintptr_t)slave_null & 0xffff),
+		.selector = 0x08,
+		._zero = 0,
+		.type_attributes = 0x8e, // Present, ring 0, interrupt gate
+		.offset_hi = (uint16_t)(((uintptr_t)slave_null >> 16) & 0xffff),
 	};
 
 	asm("lidt [%0]" : : "r"(&idtr32));

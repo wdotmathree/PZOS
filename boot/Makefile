@@ -4,7 +4,6 @@ LD := /opt/cross/i686-elf/bin/ld
 
 ASMSRCS := $(wildcard *.asm)
 CSRCS := $(wildcard *.c)
-SRCS := $(ASMSRCS) $(CSRCS)
 OBJS = $(ASMSRCS:.asm=_asm.o) $(CSRCS:.c=_c.o)
 
 ASFLAGS := -f elf32
@@ -17,7 +16,8 @@ release: all
 
 all: $(OBJS)
 	$(LD) -m elf_i386 -T link.ld -o boot.elf $(OBJS) -L../libc -lk
-	objcopy -S -O binary boot.elf boot.bin
+	objcopy -O binary -j .mbr boot.elf mbr.bin
+	objcopy -S -O binary -R .mbr boot.elf boot.bin
 
 debug: CFLAGS += -g -Og
 debug: ASFLAGS += -gdwarf
@@ -37,4 +37,4 @@ test: release
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) boot.elf boot.bin
+	rm -f $(OBJS) boot.elf boot.bin mbr.bin
