@@ -1,23 +1,25 @@
 AS := nasm
 CC := /opt/cross/bin/i686-elf-gcc
-LD := /opt/cross/i686-elf/bin/ld
+LD := /opt/cross/bin/i686-elf-ld
 
 ASMSRCS := $(wildcard *.asm)
 CSRCS := $(wildcard *.c)
 OBJS = $(ASMSRCS:.asm=_asm.o) $(CSRCS:.c=_c.o)
 
-ASFLAGS := -f elf32
-CFLAGS := -ffreestanding -I../include/ -mgeneral-regs-only -mno-red-zone -masm=intel
+# ASMLIBS = $(shell cd ../libc ; find *.asm)
+CLIBS = $(shell cd ../libc ; find *.c)
+LIBOBJS = $(ASMLIBS:.asm=_lasm.o) $(CLIBS:.c=_lc.o)
 
-.PHONY: all clean
+ASFLAGS := -f elf32
+CFLAGS := -std=gnu99 -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include -mgeneral-regs-only -mno-red-zone -masm=intel
+
+.PHONY: release debug clean
 
 release: CFLAGS += -O2
 release: all
 
-all: $(OBJS)
-	$(LD) -m elf_i386 -T link.ld -o boot.elf $(OBJS) -L../libc -lk
-	objcopy -O binary -j .mbr boot.elf mbr.bin
-	objcopy -S -O binary -R .mbr boot.elf boot.bin
+test: release
+	qemu-system-i386 -m 8G -drive file=combined.bin,format=raw
 
 debug: CFLAGS += -g -Og
 debug: ASFLAGS += -gdwarf
@@ -25,8 +27,10 @@ debug: all
 	qemu-system-i386 -m 8G -drive file=boot.bin,format=raw -s -S
 	# gdb -ex "target remote :1234" -ex "file boot.elf" -ex "b boot1" -ex "c"
 
-test: release
-	qemu-system-i386 -m 8G -drive file=boot.bin,format=raw
+all: $(OBJS) $(LIBOBJS)
+	$(LD) -T link.ld -o boot.elf $(OBJS) $(LIBOBJS)
+	objcopy -O binary -j .mbr boot.elf mbr.bin
+	objcopy -S -O binary -R .mbr boot.elf boot.bin
 
 # Real mode and others
 %_asm.o: %.asm
@@ -36,5 +40,11 @@ test: release
 %_c.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
+%_lasm.o: ../libc/%.asm
+	$(AS) $(ASFLAGS) $< -o $@
+
+%_lc.o: ../libc/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
 clean:
-	rm -f $(OBJS) boot.elf boot.bin mbr.bin
+	rm -f $(OBJS) $(LIBOBJS) boot.elf boot.bin mbr.bin

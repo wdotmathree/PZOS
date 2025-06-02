@@ -2,6 +2,11 @@
 #include <stdio.h>
 #include <tty.h>
 
+void kernel_early(void) {
+	// do stuff
+	asm("cli;hlt");
+}
+
 void kernel_main(void) {
 	terminal_initialize();
 

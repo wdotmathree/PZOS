@@ -1,22 +1,42 @@
-CC := /opt/cross/bin/i686-elf-gcc
 AS := nasm
+CC := /opt/cross/bin/x86_64-elf-gcc
 
-CSRCS := $(shell find . -name "*.c")
 ASMSRCS := $(shell find . -name "*.asm")
-OBJS = $(ASMSRCS:.asm=_asm.o) $(CSRCS:.c=_c.o)
+CSRCS := $(shell find . -name "*.c")
 
-CFLAGS := -std=gnu99 -ffreestanding -O2 -Wall -Wextra -Werror -I../include
-ASFLAGS := -f elf32 -Werror
+CFLAGS := -std=gnu99 -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include
+ASFLAGS := -f elf32
 
 ifeq ($(TYPE),K)
 	CFLAGS += -D__is_libk=1 -U__is_libc
+	OBJS = $(ASMSRCS:.asm=_K_asm.o) $(CSRCS:.c=_K_c.o)
+
+%_K_c.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+%_K_asm.o: %.asm
+	$(AS) $(ASFLAGS) $< -o $@
+
 else
 	CFLAGS += -D__is_libc=1 -U__is_libk
+	OBJS = $(ASMSRCS:.asm=_C_asm.o) $(CSRCS:.c=_C_c.o)
+
+%_C_c.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+%_C_asm.o: %.asm
+	$(AS) $(ASFLAGS) $< -o $@
+
 endif
 
-.PHONY: all clean
+.PHONY: release debug clean
 
-all: libc.a libk.a
+release: CFLAGS += -O2
+release: libc.a
+
+debug: CFLAGS += -g -Og
+debug: ASFLAGS += -gdwarf
+debug: libc.a
 
 libk.a: $(OBJS)
 	$(AR) rcs libk.a $(OBJS)
@@ -24,11 +44,5 @@ libk.a: $(OBJS)
 libc.a: $(OBJS)
 	$(AR) rcs libc.a $(OBJS)
 
-%_c.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
-
-%_asm.o: %.asm
-	$(AS) $(ASFLAGS) $< -o $@
-
 clean:
-	rm -f $(OBJS) libk.a libc.a
+	rm -f *.o libk.a libc.a

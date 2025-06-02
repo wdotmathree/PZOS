@@ -20,7 +20,7 @@ struct InterruptFrame32 {
 	uint32_t eip;
 } __attribute__((packed));
 
-extern const void const idtr32;
+extern const void idtr32;
 
 char letters[] = "0123456789ABCDEF";
 
@@ -37,7 +37,16 @@ void exception_handler(int num, int error) {
 	terminal_putchar(letters[(error >> 8) & 0xf]);
 	terminal_putchar(letters[(error >> 4) & 0xf]);
 	terminal_putchar(letters[(error >> 0) & 0xf]);
-	terminal_writestring("\n");
+
+	terminal_writestring("\nEIP: ");
+	terminal_putchar(letters[(error >> 28) & 0xf]);
+	terminal_putchar(letters[(error >> 24) & 0xf]);
+	terminal_putchar(letters[(error >> 20) & 0xf]);
+	terminal_putchar(letters[(error >> 16) & 0xf]);
+	terminal_putchar(letters[(error >> 12) & 0xf]);
+	terminal_putchar(letters[(error >> 8) & 0xf]);
+	terminal_putchar(letters[(error >> 4) & 0xf]);
+	terminal_putchar(letters[(error >> 0) & 0xf]);
 
 	while (1)
 		asm("hlt");
