@@ -4,6 +4,8 @@
 #include <tty.h>
 #include <vga.h>
 
+void (*kernel_main)(void) = (void *)0xffffffff8100000;
+
 struct GateDescriptor32 {
 	uint16_t offset_lo;
 	uint16_t selector;
@@ -116,6 +118,8 @@ void boot2(void) {
 
 	terminal_initialize();
 	terminal_writestring("Hello, World!\n");
+
+	kernel_main();
 
 	while (1)
 		asm("hlt");

@@ -16,18 +16,18 @@ CFLAGS := -std=gnu99 -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../inc
 .PHONY: release debug clean
 
 release: CFLAGS += -O2
-release: all
+release: boot.elf
 
 test: release
 	qemu-system-i386 -m 8G -drive file=combined.bin,format=raw
 
 debug: CFLAGS += -g -Og
 debug: ASFLAGS += -gdwarf
-debug: all
+debug: boot.elf
 	qemu-system-i386 -m 8G -drive file=boot.bin,format=raw -s -S
 	# gdb -ex "target remote :1234" -ex "file boot.elf" -ex "b boot1" -ex "c"
 
-all: $(OBJS) $(LIBOBJS)
+boot.elf: $(OBJS) $(LIBOBJS)
 	$(LD) -T link.ld -o boot.elf $(OBJS) $(LIBOBJS)
 	objcopy -O binary -j .mbr boot.elf mbr.bin
 	objcopy -S -O binary -R .mbr boot.elf boot.bin

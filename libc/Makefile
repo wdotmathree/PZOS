@@ -5,7 +5,7 @@ ASMSRCS := $(shell find . -name "*.asm")
 CSRCS := $(shell find . -name "*.c")
 
 CFLAGS := -std=gnu99 -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include
-ASFLAGS := -f elf32
+ASFLAGS := -f elf64
 
 ifeq ($(TYPE),K)
 	CFLAGS += -D__is_libk=1 -U__is_libc
