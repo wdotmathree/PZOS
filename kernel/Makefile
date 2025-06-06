@@ -1,3 +1,5 @@
+.PHONY: release debug all clean
+
 AS := nasm
 CC := /opt/cross/bin/x86_64-elf-gcc
 LD := /opt/cross/bin/x86_64-elf-ld
@@ -7,31 +9,30 @@ CSRCS := $(wildcard *.c)
 OBJS = $(CSRCS:.c=.o) $(ASMSRCS:.asm=.o)
 
 ASFLAGS := -f elf64
-CFLAGS := -std=gnu99 -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include -mno-red-zone -masm=intel -D_KERNEL
-
-.PHONY: release debug all libk clean
+CFLAGS := -std=gnu11 -mcmodel=kernel -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include -I../limine -mno-red-zone -masm=intel -D_KERNEL
 
 release: CFLAGS += -O2
-release: kernel.elf
-	objcopy -S -R .eh_frame -R .comment kernel.elf kernel.bin
+release: all
+	objcopy -S kernel.elf kernel.bin
 
 debug: CFLAGS += -g -Og
 debug: ASFLAGS += -gdwarf
-debug: kernel.elf
+debug: all
 	cp kernel.elf kernel.bin
 
-kernel.elf: libk $(OBJS)
+all:
+	$(MAKE) -C ../libc libk.a
+	$(MAKE) kernel.elf
+
+kernel.elf: $(OBJS) link.ld ../libc/libk.a
 	$(LD) -T link.ld -o kernel.elf $(OBJS) -L../libc -lk
 
-libk:
-	TYPE=K $(MAKE) -C ../libc libk.a
-
-%.o: %.c
+%.o: %.c Makefile ../include/**
 	$(CC) $(CFLAGS) -c $< -o $@
 
-%.o: %.asm
+%.o: %.asm Makefile
 	$(AS) $(ASFLAGS) $< -o $@
 
 clean:
-	TYPE=K $(MAKE) -C ../libc clean
+	$(MAKE) -C ../libc clean
 	rm -f $(OBJS) kernel.bin

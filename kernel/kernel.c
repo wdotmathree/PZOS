@@ -1,16 +1,27 @@
-#include <stdint.h>
-#include <stdio.h>
+#include <limine.h>
 #include <tty.h>
 
-void kernel_early(void) {
-	// do stuff
-	asm("cli;hlt");
+__attribute__((used, section(".limine_requests_start"))) //
+static volatile LIMINE_REQUESTS_START_MARKER;
+
+__attribute__((used, section(".limine_requests"))) //
+static volatile LIMINE_BASE_REVISION(3);
+
+__attribute__((used, section(".limine_requests"))) //
+static volatile struct limine_framebuffer_request framebuffer_request = {
+	.id = LIMINE_FRAMEBUFFER_REQUEST,
+	.revision = 0
+};
+
+__attribute__((used, section(".limine_requests_end"))) //
+static volatile LIMINE_REQUESTS_END_MARKER;
+
+void kmain(void);
+
+void kinit(void) {
+	kmain();
 }
 
-void kernel_main(void) {
-	terminal_initialize();
-
-	terminal_writestring("Hello, kernel World!\n");
-
-	printf("%d\nabcde\n%s\naaa\n%c", 1234, "Hello, printf World!", 'a');
+void kmain(void) {
+	asm("cli;hlt");
 }

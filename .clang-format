@@ -1,0 +1,11 @@
+BasedOnStyle: LLVM
+AccessModifierOffset: -4
+FixNamespaceComments: false
+NamespaceIndentation: All
+IndentWidth: 4
+TabWidth: 4
+UseTab: Always
+ColumnLimit: 0
+AlignTrailingComments: false
+AlignAfterOpenBracket: BlockIndent
+AllowShortFunctionsOnASingleLine: Empty

@@ -19,10 +19,10 @@ void *memcpy(void *__restrict dst, const void *__restrict src, size_t n) {
 	return dst;
 }
 
-void *memmove(void *dest, const void *src, size_t len) {
-	char *d = dest;
+void *memmove(void *dst, const void *src, size_t len) {
+	char *d = dst;
 	const char *s = src;
-	if (d < s) {
+	if (s > d) {
 		while (len--) {
 			*d++ = *s++;
 		}
@@ -33,7 +33,7 @@ void *memmove(void *dest, const void *src, size_t len) {
 			*lastd-- = *lasts--;
 		}
 	}
-	return dest;
+	return dst;
 }
 
 void *memset(void *s, int c, size_t n) {

@@ -3,4 +3,4 @@
 *.iso
 *.a
 *.elf
-imgdir/
+isodir/
