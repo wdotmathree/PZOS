@@ -8,7 +8,7 @@ ASMSRCS := $(shell find . -name "*.asm")
 CSRCS := $(shell find . -name "*.c")
 
 ASFLAGS := -f elf64
-CFLAGS := -std=gnu99 -Wall -Wextra -Wno-unused-parameter -I../include -mno-red-zone -masm=intel
+CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I../include -mno-red-zone -masm=intel
 
 OBJS := $(CSRCS:.c=.c.o) $(ASMSRCS:.asm=.asm.o)
 KOBJS := $(OBJS:.o=.k.o)

@@ -18,13 +18,13 @@ PZOS.bin: kernel/kernel.elf limine/limine limine.conf bg.jpg
 
 	limine/limine bios-install PZOS.bin
 
-test: all
+test: img
 	qemu-system-x86_64 -m 4G -drive file=PZOS.bin,format=raw
 
-test-efi: all
+test-efi: img
 	qemu-system-x86_64 -m 4G -drive file=PZOS.bin,format=raw -bios /usr/share/OVMF/OVMF_CODE.fd -net none
 
-debug: all
+debug: img
 	qemu-system-x86_64 -m 4G -drive file=PZOS.bin,format=raw -s -S
 	# gdb -ex "target remote :1234" -ex "file kernel/kernel.elf" -ex "b kernel_main" -ex "c"
 
