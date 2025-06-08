@@ -15,7 +15,7 @@ release: CFLAGS += -O2
 release: all
 	objcopy -S kernel.elf kernel.bin
 
-debug: CFLAGS += -g -Og
+debug: CFLAGS += -g -O0
 debug: ASFLAGS += -gdwarf
 debug: TARGET := debug
 debug: all

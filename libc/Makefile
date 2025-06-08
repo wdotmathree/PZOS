@@ -16,7 +16,7 @@ KOBJS := $(OBJS:.o=.k.o)
 release: CFLAGS += -O2
 release: libk.a # libc.a
 
-debug: CFLAGS += -g -Og
+debug: CFLAGS += -g -O0
 debug: ASFLAGS += -gdwarf
 debug: libk.a # libc.a
 

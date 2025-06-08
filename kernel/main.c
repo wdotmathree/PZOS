@@ -42,15 +42,25 @@ void kinit(void) {
 	asm("sti");
 
 	kmain();
-
 	panic("kmain returned unexpectedly");
 }
 
 void kmain(void) {
 	tty_puts("PZOS booted successfully!\n");
 
+	int a = 1;
+	int b = 1;
+	while (true) {
+		int c = a + b;
+		printf("%d\n", a);
+		a = b;
+		b = c;
+		for (int i = 0; i < 500000000; i++) {
+			asm("nop");
+		}
+	}
+
 	while (true)
 		halt();
-
 	panic(NULL);
 }

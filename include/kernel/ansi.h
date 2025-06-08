@@ -55,7 +55,6 @@ static const uint32_t ANSI_4BIT_COLORS[16] = {
 };
 
 // 8-bit ANSI color codes
-
 uint32_t ANSI_8BIT_COLORS[256];
 
 #endif
