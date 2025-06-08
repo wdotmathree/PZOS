@@ -8,7 +8,7 @@ ASMSRCS := $(shell find . -name "*.asm")
 CSRCS := $(shell find . -name "*.c")
 
 ASFLAGS := -f elf64
-CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I../include -mno-red-zone -masm=intel
+CFLAGS := -mgeneral-regs-only -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I./include -mno-red-zone -masm=intel
 
 OBJS := $(CSRCS:.c=.c.o) $(ASMSRCS:.asm=.asm.o)
 KOBJS := $(OBJS:.o=.k.o)
@@ -18,7 +18,7 @@ release: libk.a # libc.a
 
 debug: CFLAGS += -g -Og
 debug: ASFLAGS += -gdwarf
-debug: libk.a libc.a
+debug: libk.a # libc.a
 
 libk.a: $(KOBJS)
 	$(AR) rcs libk.a $(KOBJS)
@@ -26,17 +26,17 @@ libk.a: $(KOBJS)
 libc.a: $(COBJS)
 	$(AR) rcs libc.a $(COBJS)
 
-%.c.o: %.c Makefile ../include/**
+%.c.o: %.c Makefile ./include/**
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %.asm.o: %.asm Makefile
 	$(AS) $(ASFLAGS) $< -o $@
 
-%.c.k.o: %.c Makefile ../include/**
+%.c.k.o: %.c Makefile ./include/**
 	$(CC) $(CFLAGS) -c $< -o $@ -D__is_libk -ffreestanding
 
 %.asm.k.o: %.asm Makefile
-	$(AS) $(ASFLAGS) $< -o $@
+	$(AS) $(ASFLAGS) $< -o $@ -D__is_libk
 
 clean:
 	rm -f $(OBJS) $(KOBJS) libk.a libc.a

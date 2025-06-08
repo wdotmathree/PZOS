@@ -5,6 +5,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+static inline void nop(void) {
+	asm("nop");
+}
+
 static inline void outb(uint16_t port, uint8_t value) {
 	asm("out %0, %1" : : "Nd"(port), "a"(value));
 }

@@ -9,3 +9,4 @@ ColumnLimit: 0
 AlignTrailingComments: false
 AlignAfterOpenBracket: BlockIndent
 AllowShortFunctionsOnASingleLine: Empty
+AlwaysBreakAfterReturnType: None

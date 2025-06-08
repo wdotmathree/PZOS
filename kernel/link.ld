@@ -11,7 +11,9 @@ SECTIONS {
 	. = 0xffffffff80000000;
 
 	.limine_requests : ALIGN(0x1000) {
-		*(.limine_requests*)
+		*(.limine_requests_start)
+		*(.limine_requests)
+		*(.limine_requests_end)
 	} : limine_requests
 
 	.text BLOCK(0x1000) : ALIGN(0x1000) {

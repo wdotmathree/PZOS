@@ -4,3 +4,5 @@
 *.a
 *.elf
 isodir/
+*.ttf
+!glyphs.bin

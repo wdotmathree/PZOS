@@ -9,7 +9,7 @@ CSRCS := $(wildcard *.c)
 OBJS = $(CSRCS:.c=.o) $(ASMSRCS:.asm=.o)
 
 ASFLAGS := -f elf64
-CFLAGS := -std=gnu11 -mcmodel=kernel -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include -I../limine -mno-red-zone -masm=intel
+CFLAGS ?= -mgeneral-regs-only -std=gnu11 -mcmodel=kernel -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../libc/include -I ./include -I../limine -mno-red-zone -masm=intel
 
 release: CFLAGS += -O2
 release: all
@@ -17,16 +17,18 @@ release: all
 
 debug: CFLAGS += -g -Og
 debug: ASFLAGS += -gdwarf
+debug: TARGET := debug
 debug: all
 	cp kernel.elf kernel.bin
 
 all:
-	$(MAKE) -C ../libc libk.a
-	$(MAKE) kernel.elf
+	$(MAKE) -C ../libc $(TARGET)
+	CFLAGS="$(CFLAGS)" $(MAKE) kernel.elf
 
 kernel.elf: $(OBJS) link.ld ../libc/libk.a
 	$(LD) -T link.ld -o kernel.elf $(OBJS) -L../libc -lk
 
+tty.o: tty.c glyphs.bin
 %.o: %.c Makefile ../include/**
 	$(CC) $(CFLAGS) -c $< -o $@
 
@@ -35,4 +37,4 @@ kernel.elf: $(OBJS) link.ld ../libc/libk.a
 
 clean:
 	$(MAKE) -C ../libc clean
-	rm -f $(OBJS) kernel.bin
+	rm -f $(OBJS) kernel.elf kernel.bin
