@@ -53,7 +53,6 @@ static void init_ansicolors(void) {
 		uint16_t gray = (i + 1) * 255 / 25;
 		ANSI_8BIT_COLORS[i + 232] = gray * 0x010101;
 	}
-	asm volatile("nop");
 }
 
 void tty_init(const struct limine_framebuffer *framebuffer) {

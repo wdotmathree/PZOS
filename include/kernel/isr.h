@@ -33,7 +33,7 @@ struct isr_frame_t {
 	uint64_t rbx;
 	uint64_t rax;
 
-	uint64_t interrupt_number;
+	uint64_t irq_num;
 	uint64_t error_code;
 
 	uint64_t isr_rip;

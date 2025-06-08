@@ -29,7 +29,7 @@ kernel.elf: $(OBJS) link.ld ../libc/libk.a
 	$(LD) -T link.ld -o kernel.elf $(OBJS) -L../libc -lk
 
 tty.o: glyphs.bin
-%_c.o: %.c Makefile ../include/**
+%_c.o: %.c Makefile $(shell find ../include)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %_asm.o: %.asm Makefile

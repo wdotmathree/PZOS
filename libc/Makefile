@@ -26,13 +26,13 @@ libk.a: $(KOBJS)
 libc.a: $(COBJS)
 	$(AR) rcs libc.a $(COBJS)
 
-%_c.o: %.c Makefile ../include/**
+%_c.o: %.c Makefile $(shell find ../include)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %_asm.o: %.asm Makefile
 	$(AS) $(ASFLAGS) $< -o $@
 
-%_c.k.o: %.c Makefile ../include/**
+%_c.k.o: %.c Makefile $(shell find ../include)
 	$(CC) $(CFLAGS) -c $< -o $@ -D__is_libk -ffreestanding -I../limine -mcmodel=kernel -mgeneral-regs-only
 
 %_asm.k.o: %.asm Makefile

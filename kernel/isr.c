@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 
+#include <kernel/defines.h>
 #include <kernel/panic.h>
 
 struct idt_entry idt[IDT_SIZE];
@@ -21,7 +22,7 @@ void idt_load(void) {
 void register_isr(uint8_t num, void *handler, uint8_t dpl) {
 	struct idt_entry *entry = &idt[num];
 	entry->isr_low = (uintptr_t)handler & 0xffff;
-	entry->kernel_cs = 5 << 3;
+	entry->kernel_cs = KERNEL_CS;
 	entry->ist = 0;
 	entry->attributes = 0x8e | (dpl << 5);
 	entry->isr_mid = ((uintptr_t)handler >> 16) & 0xffff;
@@ -29,9 +30,18 @@ void register_isr(uint8_t num, void *handler, uint8_t dpl) {
 }
 
 struct isr_frame_t *isr_dispatcher(struct isr_frame_t *const frame) {
-	printf("ISR %u triggered with error code %u\n", frame->interrupt_number, frame->error_code);
-
-	ipanic("Unhandled ISR", frame);
+	switch (frame->irq_num) {
+	case 0x81: // Custom panic ISR
+		if (frame->isr_cs != KERNEL_CS) {
+			// Misbehaving userland code
+			// kill();
+			break;
+		}
+		_panic(*(const char **)frame->isr_rsp, frame);
+	default:
+		printf("ISR %u triggered with error code %u\n", frame->irq_num, frame->error_code);
+		_panic("Unhandled ISR", frame);
+	}
 
 	return frame;
 }

@@ -1,0 +1,6 @@
+- Extract architecture dependent files into folders
+	- Figure out which ones they are
+	- Figure out how to compile and link them accordingly
+- Figure out how to link against libgcc
+- Find bugs and clean up code (especially tty and printf)
+- Review code structure and organization
