@@ -26,6 +26,7 @@ static size_t buf_width;
 static size_t buf_height;
 
 void tty_drawcursor(void) {
+	// Bottom of current cell
 	size_t index = ((tty_row + 1) * GLYPH_HEIGHT - 1) * buf_width + tty_col * GLYPH_WIDTH;
 	for (int i = 0; i < GLYPH_WIDTH; i++) {
 		tty_buf[index + i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
@@ -51,13 +52,13 @@ void tty_clear(void) {
 }
 
 uint32_t mix(uint64_t color, uint8_t alpha) {
-	uint32_t fg_r = (color >> 16) & 0xff;
-	uint32_t fg_g = (color >> 8) & 0xff;
-	uint32_t fg_b = (color >> 0) & 0xff;
+	uint16_t fg_r = (color >> 16) & 0xff;
+	uint16_t fg_g = (color >> 8) & 0xff;
+	uint16_t fg_b = (color >> 0) & 0xff;
 
-	uint32_t bg_r = (color >> 40) & 0xff;
-	uint32_t bg_g = (color >> 32) & 0xff;
-	uint32_t bg_b = (color >> 24) & 0xff;
+	uint16_t bg_r = (color >> 40) & 0xff;
+	uint16_t bg_g = (color >> 32) & 0xff;
+	uint16_t bg_b = (color >> 24) & 0xff;
 
 	// Simple alpha blending
 	uint8_t r = (fg_r * alpha + bg_r * (255 - alpha)) / 255;
@@ -69,7 +70,6 @@ uint32_t mix(uint64_t color, uint8_t alpha) {
 
 void tty_blitchar(char c, size_t x, size_t y) {
 	size_t index = y * GLYPH_HEIGHT * buf_width + x * GLYPH_WIDTH;
-	// blit glyph onto buffer
 	for (int y = 0; y < GLYPH_HEIGHT; y++) {
 		for (int x = 0; x < GLYPH_WIDTH; x++) {
 			size_t glyph_index = ((c - 0x20) * GLYPH_HEIGHT + y) * GLYPH_WIDTH + x;

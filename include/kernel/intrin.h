@@ -1,6 +1,6 @@
 #pragma once
-#ifndef INTRIN_H
-#define INTRIN_H
+#ifndef KERNEL_INTRIN_H
+#define KERNEL_INTRIN_H
 
 #include <stddef.h>
 #include <stdint.h>

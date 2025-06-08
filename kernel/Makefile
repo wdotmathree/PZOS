@@ -6,7 +6,7 @@ LD := /opt/cross/bin/x86_64-elf-ld
 
 ASMSRCS := $(wildcard *.asm)
 CSRCS := $(wildcard *.c)
-OBJS = $(CSRCS:.c=.o) $(ASMSRCS:.asm=.o)
+OBJS := $(CSRCS:.c=_c.o) $(ASMSRCS:.asm=_asm.o)
 
 ASFLAGS := -f elf64
 CFLAGS ?= -mgeneral-regs-only -std=gnu11 -mcmodel=kernel -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include -I../limine -mno-red-zone -masm=intel
@@ -28,11 +28,11 @@ all:
 kernel.elf: $(OBJS) link.ld ../libc/libk.a
 	$(LD) -T link.ld -o kernel.elf $(OBJS) -L../libc -lk
 
-tty.o: tty.c glyphs.bin
-%.o: %.c Makefile ../include/**
+tty.o: glyphs.bin
+%_c.o: %.c Makefile ../include/**
 	$(CC) $(CFLAGS) -c $< -o $@
 
-%.o: %.asm Makefile
+%_asm.o: %.asm Makefile
 	$(AS) $(ASFLAGS) $< -o $@
 
 clean:

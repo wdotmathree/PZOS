@@ -1,6 +1,6 @@
 #pragma once
-#ifndef ANSI_H
-#define ANSI_H
+#ifndef KERNEL_ANSI_H
+#define KERNEL_ANSI_H
 
 #include <stdint.h>
 

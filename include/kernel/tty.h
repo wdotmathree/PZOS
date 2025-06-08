@@ -1,6 +1,6 @@
 #pragma once
-#ifndef TTY_H
-#define TTY_H
+#ifndef KERNEL_TTY_H
+#define KERNEL_TTY_H
 
 #include <limine.h>
 #include <stddef.h>

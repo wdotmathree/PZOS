@@ -5,6 +5,7 @@
 #include <limine.h>
 
 #include <kernel/intrin.h>
+#include <kernel/isr.h>
 #include <kernel/panic.h>
 #include <kernel/tty.h>
 
@@ -28,11 +29,17 @@ __attribute__((noreturn)) void kmain(void);
 void kinit(void) {
 	if (!LIMINE_BASE_REVISION_SUPPORTED)
 		halt();
-
 	if (framebuffer_request.response == NULL || framebuffer_request.response->framebuffer_count < 1)
 		halt();
-
 	tty_init(framebuffer_request.response->framebuffers[0]);
+
+	// Initialize IDT
+	extern void isr_stub_0;
+	for (int i = 0; i < IDT_SIZE; i++) {
+		register_isr(i, &isr_stub_0 + (16 * i), 0);
+	}
+	idt_load();
+	asm("sti");
 
 	kmain();
 
