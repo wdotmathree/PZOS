@@ -1,6 +1,6 @@
-#include <panic.h>
+#include <kernel/panic.h>
 
-#include <tty.h>
+#include <kernel/tty.h>
 
 __attribute__((noreturn)) void panic(const char *msg) {
 	tty_clear();

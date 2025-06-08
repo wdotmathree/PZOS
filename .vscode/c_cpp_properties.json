@@ -3,8 +3,7 @@
         {
             "name": "cross",
             "includePath": [
-                "${workspaceFolder}/libc/include/**",
-                "${workspaceFolder}/kernel/include/**",
+                "${workspaceFolder}/include",
                 "${workspaceFolder}/limine",
                 "/opt/cross/lib/gcc/x86_64-elf/*/include/**"
             ],

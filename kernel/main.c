@@ -1,9 +1,12 @@
-#include <incbin.h>
-#include <intrin.h>
-#include <limine.h>
-#include <panic.h>
 #include <stdbool.h>
-#include <tty.h>
+#include <stdio.h>
+
+#include <incbin.h>
+#include <limine.h>
+
+#include <kernel/intrin.h>
+#include <kernel/panic.h>
+#include <kernel/tty.h>
 
 __attribute__((used, section(".limine_requests_start"))) //
 static volatile LIMINE_REQUESTS_START_MARKER;
@@ -24,10 +27,10 @@ __attribute__((noreturn)) void kmain(void);
 
 void kinit(void) {
 	if (!LIMINE_BASE_REVISION_SUPPORTED)
-		asm("cli;hlt");
+		halt();
 
 	if (framebuffer_request.response == NULL || framebuffer_request.response->framebuffer_count < 1)
-		asm("cli;hlt");
+		halt();
 
 	tty_init(framebuffer_request.response->framebuffers[0]);
 

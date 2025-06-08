@@ -1,10 +1,11 @@
-#include <tty.h>
+#include <kernel/tty.h>
 
-#include <ansi.h>
 #include <incbin.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+
+#include <kernel/ansi.h>
 
 INCBIN(GLYPHS, "glyphs.bin");
 
@@ -163,6 +164,8 @@ void tty_write(const char *data, size_t size) {
 	}
 }
 
-void tty_puts(const char *data) {
-	tty_write(data, strlen(data));
+int tty_puts(const char *data) {
+	int len = strlen(data);
+	tty_write(data, len);
+	return len;
 }

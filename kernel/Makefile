@@ -9,7 +9,7 @@ CSRCS := $(wildcard *.c)
 OBJS = $(CSRCS:.c=.o) $(ASMSRCS:.asm=.o)
 
 ASFLAGS := -f elf64
-CFLAGS ?= -mgeneral-regs-only -std=gnu11 -mcmodel=kernel -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../libc/include -I ./include -I../limine -mno-red-zone -masm=intel
+CFLAGS ?= -mgeneral-regs-only -std=gnu11 -mcmodel=kernel -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include -I../limine -mno-red-zone -masm=intel
 
 release: CFLAGS += -O2
 release: all

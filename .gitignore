@@ -6,3 +6,4 @@
 isodir/
 *.ttf
 !glyphs.bin
+.vscode/settings.json
