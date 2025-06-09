@@ -1,35 +1,32 @@
 .PHONY: release debug all clean
 
-AS := nasm
-CC := /opt/cross/bin/x86_64-elf-gcc
-LD := /opt/cross/bin/x86_64-elf-ld
-
-ASMSRCS := $(wildcard *.asm)
-CSRCS := $(wildcard *.c)
+ASMSRCS := $(shell find src arch/$(ARCH) -name "*.asm")
+CSRCS := $(shell find src arch/$(ARCH) -name "*.c")
 OBJS := $(CSRCS:.c=_c.o) $(ASMSRCS:.asm=_asm.o)
 
 ASFLAGS := -f elf64
-CFLAGS ?= -mgeneral-regs-only -std=gnu11 -mcmodel=kernel -ffreestanding -Wall -Wextra -Wno-unused-parameter -I../include -I../limine -mno-red-zone -masm=intel
+CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I./include -I./arch/$(ARCH) -I../libc/include -I../limine -mno-red-zone -masm=intel -ffreestanding -mcmodel=kernel -mgeneral-regs-only
+
+include arch/$(ARCH)/make.config
 
 release: CFLAGS += -O2
-release: all
+release: kernel.elf
 	objcopy -S kernel.elf kernel.bin
 
 debug: CFLAGS += -g -O0
 debug: ASFLAGS += -gdwarf
 debug: TARGET := debug
-debug: all
+debug: kernel.elf
 	cp kernel.elf kernel.bin
 
-all:
-	$(MAKE) -C ../libc $(TARGET)
-	CFLAGS="$(CFLAGS)" $(MAKE) kernel.elf
-
 kernel.elf: $(OBJS) link.ld ../libc/libk.a
-	$(LD) -T link.ld -o kernel.elf $(OBJS) -L../libc -lk
+	$(CC) -T link.ld -o kernel.elf $(OBJS) -L../libc -nostdlib -lk -lgcc
+
+../libc/libk.a:
+	$(MAKE) -C ../libc $(TARGET)
 
 tty.o: glyphs.bin
-%_c.o: %.c Makefile $(shell find ../include)
+%_c.o: %.c Makefile $(shell find ../libc/include ./include ./arch/$(ARCH) ../limine)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %_asm.o: %.asm Makefile

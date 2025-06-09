@@ -1,6 +1,10 @@
 #pragma once
-#ifndef KERNEL_INTRIN_H
-#define KERNEL_INTRIN_H
+#ifndef ARCH_x86_64_INTRIN_H
+#define ARCH_x86_64_INTRIN_H
+
+#ifndef __arch_x86_64__
+#error "This file should only be included on x86_64 architecture."
+#endif
 
 #include <stddef.h>
 #include <stdint.h>

@@ -1,14 +1,21 @@
 .PHONY: img test debug clean
 
+export AS := nasm
+export AR := /opt/cross/bin/x86_64-elf-ar
+export CC := /opt/cross/bin/x86_64-elf-gcc
+export ARCH := x86_64
+
 img:
 	$(MAKE) -C limine
 	$(MAKE) -C kernel $(TARGET)
+
 	$(MAKE) PZOS.bin
 
-PZOS.bin: kernel/kernel.elf limine/limine limine.conf bg.jpg
+PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 	dd if=/dev/zero of=PZOS.bin bs=1M count=64
-	PATH=${PATH}:/usr/sbin:/sbin sgdisk PZOS.bin -n 1:2048:32768 -t 1:EF00
-	mformat -F -i PZOS.bin@@1M
+	PATH=${PATH}:/usr/sbin:/sbin sgdisk PZOS.bin -n 1:2048:32767 -t 1:EF00 -n 2:32768 -t 2:8300
+	mformat -i PZOS.bin@@1M -T 30720
+	mformat -F -i PZOS.bin@@16M
 
 	mmd -i PZOS.bin@@1M ::/EFI ::/EFI/BOOT ::/boot ::/boot/limine
 	mcopy -i PZOS.bin@@1M kernel/kernel.elf ::/boot/PZOS.bin

@@ -1,6 +1,10 @@
 #pragma once
-#ifndef KERNEL_ISR_H
-#define KERNEL_ISR_H
+#ifndef ARCH_X86_64_ISR_H
+#define ARCH_X86_64_ISR_H
+
+#ifndef __arch_x86_64__
+#error "This file should only be included on x86_64 architecture."
+#endif
 
 #include <stdint.h>
 
