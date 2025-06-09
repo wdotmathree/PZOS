@@ -1,6 +1,31 @@
-- Extract architecture dependent files into folders
-	- Figure out which ones they are
-	- Figure out how to compile and link them accordingly
-- Figure out how to link against libgcc
-- Find bugs and clean up code (especially tty and printf)
-- Review code structure and organization
+### Maintenance tasks
+  - Find bugs and clean up code (especially tty and printf)
+  - Review and adjust folder structure as needed during future development
+
+### Development steps
+  1. Figure out how to use the serial port
+  2. Investigate memory management and paging
+     1. What is the structure of our current page table?
+     2. Can we request, parse, and incorporate limine's memory map?
+     3. What should our memory layout look like?
+     4. Implement allocators
+        1. Buddy allocator
+        2. What is a slab allocator?
+        3. Implement an AVL tree for virtual memory
+  3. Make sure our kernel is robust
+     1. Investigate libk functions to ensure they are safe
+  4. Figure out APIC and/or I/O APIC
+     1. For example for keyboard input
+  5. How do timers work?
+     1. PIT vs. HPET and how to use them
+  6. Write drivers for common hardware
+     1. When do we break the drivers into loadable modules?
+     2. ATA hard drive (may need PCI support)
+     3. Does booting off a USB drive work the same as a hard drive?
+        1. If not then we also want a USB driver
+     4. PS/2 keyboard
+  7. Implement a basic file system
+	 1. Probably FAT32 at first
+	 2. Maybe abstract it into a VFS
+  8. Implement a basic shell (first userland program)
+     1. Need syscalls for I/O and such
