@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include <kernel/ansi.h>
+#include <kernel/serial.h>
 
 INCBIN(GLYPHS, "glyphs.bin");
 
@@ -256,6 +257,7 @@ static int parsecontrol(const char *s) {
 }
 
 void tty_putchar(char c) {
+	serial_write(c);
 	char str[2] = {c, 0};
 	if (parsecontrol(str)) {
 		tty_drawcursor();
@@ -275,8 +277,10 @@ void tty_putchar(char c) {
 
 void tty_write(const char *data, size_t size) {
 	for (size_t i = 0; i < size; i++) {
-		size_t off = parsecontrol(data + i);
-		i += off;
+		int off = parsecontrol(data + i);
+		for (; --off > 0; i++)
+			serial_write(data[i]);
+
 		if (i < size)
 			tty_putchar(data[i]);
 	}

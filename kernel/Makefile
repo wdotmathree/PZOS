@@ -25,8 +25,8 @@ kernel.elf: $(OBJS) link.ld ../libc/libk.a
 ../libc/libk.a:
 	$(MAKE) -C ../libc $(TARGET)
 
-tty.o: glyphs.bin
-%_c.o: %.c Makefile $(shell find ../libc/include ./include ./arch/$(ARCH) ../limine)
+src/tty.o: glyphs.bin
+%_c.o: %.c Makefile $(shell find ../libc/include ./include ./arch/$(ARCH) ../limine -name "*.h")
 	$(CC) $(CFLAGS) -c $< -o $@
 
 %_asm.o: %.asm Makefile

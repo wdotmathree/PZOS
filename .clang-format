@@ -9,4 +9,6 @@ ColumnLimit: 0
 AlignTrailingComments: false
 AlignAfterOpenBracket: BlockIndent
 AllowShortFunctionsOnASingleLine: Empty
-AlwaysBreakAfterReturnType: None
+PenaltyReturnTypeOnItsOwnLine: 1000000000
+EmptyStatementBody: SameLine
+AllowShortLoopsOnASingleLine: true

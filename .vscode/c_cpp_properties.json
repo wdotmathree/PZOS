@@ -10,7 +10,9 @@
                 "/opt/cross/lib/gcc/x86_64-elf/*/include/**"
             ],
             "defines": ["_INTELLISENSE_","__STDC_HOSTED__=0", "__arch_x86_64__"],
-            "intelliSenseMode": "gcc-x64"
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": "/opt/cross/bin/x86_64-elf-gcc",
+            "cStandard": "gnu11"
         }
     ],
     "version": 4

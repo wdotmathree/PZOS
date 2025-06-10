@@ -1,12 +1,13 @@
-#include <stdbool.h>
-#include <stdio.h>
-
 #include <incbin.h>
 #include <limine.h>
+
+#include <stdbool.h>
+#include <stdio.h>
 
 #include <kernel/intrin.h>
 #include <kernel/isr.h>
 #include <kernel/panic.h>
+#include <kernel/serial.h>
 #include <kernel/tty.h>
 
 __attribute__((used, section(".limine_requests_start"))) //
@@ -40,6 +41,12 @@ void kinit(void) {
 	}
 	idt_load();
 	asm("sti");
+
+	// Initialize serial port
+	if (serial_init()) {
+		tty_puts("Serial port initialization failed!\n");
+		halt();
+	}
 
 	kmain();
 	panic("kmain returned unexpectedly");
