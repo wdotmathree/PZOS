@@ -38,4 +38,6 @@ SECTIONS {
 		*(.comment)
 		*(.note.GNU-stack)
 	}
+
+	_binary_size = (. - 0xffffffff7ffff001) & 0xfffffffffffff000;
 }

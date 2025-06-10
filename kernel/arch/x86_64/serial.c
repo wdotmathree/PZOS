@@ -1,8 +1,12 @@
 #include <kernel/serial.h>
 
+#include <stdbool.h>
+
 #include <kernel/intrin.h>
 
 #define COM1 (0x3f8)
+
+static bool ready = false;
 
 int serial_init(void) {
 	outb(COM1 + 1, 0x00); // Disable interrupts
@@ -18,15 +22,23 @@ int serial_init(void) {
 		return -1;
 
 	outb(COM1 + 4, 0x03); // Disable loopback
+	ready = true;
+
 	return 0;
 }
 
 char serial_read(void) {
+	if (!ready)
+		return -1;
+
 	while ((inb(COM1 + 5) & 0x01) == 0);
 	return inb(COM1);
 }
 
 void serial_write(char c) {
+	if (!ready)
+		return;
+
 	while ((inb(COM1 + 5) & 0x20) == 0);
 	outb(COM1, c);
 }
