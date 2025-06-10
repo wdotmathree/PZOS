@@ -7,6 +7,7 @@
 
 #include <kernel/intrin.h>
 #include <kernel/panic.h>
+#include <kernel/pmman.h>
 #include <kernel/serial.h>
 #include <kernel/tty.h>
 
@@ -64,6 +65,7 @@ void kinit(void) {
 		halt();
 	}
 	tty_init(framebuffer_request.response->framebuffers[0]);
+	tty_puts("PZOS kernel initializing...\n");
 
 	// Initialize IDT
 	extern void isr_stub_0;
@@ -75,23 +77,36 @@ void kinit(void) {
 
 	// Initialize serial port
 	if (serial_init())
-		panic("Serial port initialization failed");
+		tty_puts("No serial port found, continuing without it.\n");
+	else
+		tty_puts("Serial port initialized successfully.\n");
 
 	// Initialize memory management
 	if (memory_map_request.response == NULL)
 		panic("Memory map request failed");
 	if (addr_request.response == NULL)
 		panic("Could not get physical address of kernel");
-	pmman_init(memory_map_request.response, hhdm_request.response->offset, addr_request.response->physical_base, &_binary_size);
+	pmman_init(memory_map_request.response, hhdm_request.response->offset, addr_request.response->physical_base, (uint64_t)&_binary_size);
+	tty_puts("Buddy allocator initialization finished.\n");
 
 	kmain();
 	panic("kmain returned unexpectedly");
 }
 
 void kmain(void) {
-	tty_puts("PZOS booted successfully!\n");
+	tty_puts("\nPZOS booted successfully!\n");
 
-	printf("%x %x %x %x", hhdm_request.response->offset, addr_request.response->physical_base, addr_request.response->virtual_base, &_binary_size);
+	tty_puts("Printing fibonacci sequence:\n");
+	size_t a = 1, b = 1;
+	while (true) {
+		size_t c = a + b;
+		printf("%u\n", a);
+		a = b;
+		b = c;
+
+		for (int i = 0; i < 300000000; i++)
+			nop();
+	}
 
 	while (true)
 		halt();

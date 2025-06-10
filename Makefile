@@ -11,6 +11,38 @@ img:
 
 	$(MAKE) PZOS.bin
 
+MOUNTPOINT := /tmp/pzos-mnt
+install:
+	@if [ -z "$(file)" ] || [ ! -e "$(file)" ] || [ ! -e "$(file)1" ] || [ ! -e "$(file)2" ]; then \
+		echo "Usage: $(MAKE) file=/dev/device install"; \
+		echo "       Device must be partitioned with an EFI partition (FAT) and a root partition (FAT32)\n"; \
+		exit 1; \
+	fi
+	$(MAKE) -C limine
+	$(MAKE) -C kernel
+
+	# mkfs.fat -F16 $(file)1
+	# mkfs.fat -F32 $(file)2
+
+	mkdir -p $(MOUNTPOINT)
+
+	sudo mount $(file)1 $(MOUNTPOINT)
+	mkdir -p $(MOUNTPOINT)/boot/limine
+	mkdir -p $(MOUNTPOINT)/EFI/BOOT
+	cp kernel/kernel.elf $(MOUNTPOINT)/boot/PZOS.bin
+	cp limine.conf $(MOUNTPOINT)/boot/limine
+	cp limine/limine-bios.sys $(MOUNTPOINT)/boot/limine
+	cp limine/BOOTX64.EFI $(MOUNTPOINT)/EFI/BOOT
+	cp limine/BOOTIA32.EFI $(MOUNTPOINT)/EFI/BOOT
+	cp bg.jpg $(MOUNTPOINT)/boot/limine
+	sudo umount -l $(MOUNTPOINT)
+
+	sudo mount $(file)2 $(MOUNTPOINT)
+	@# Copy files from sysroot
+	sudo umount -l $(MOUNTPOINT)
+
+	# limine/limine bios-install $(file)
+
 PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 	dd if=/dev/zero of=PZOS.bin bs=1M count=64
 	PATH=${PATH}:/usr/sbin:/sbin sgdisk PZOS.bin -n 1:2048:32767 -t 1:EF00 -n 2:32768 -t 2:8300

@@ -278,7 +278,7 @@ void tty_putchar(char c) {
 void tty_write(const char *data, size_t size) {
 	for (size_t i = 0; i < size; i++) {
 		int off = parsecontrol(data + i);
-		for (; --off > 0; i++)
+		for (; off-- > 0; i++)
 			serial_write(data[i]);
 
 		if (i < size)

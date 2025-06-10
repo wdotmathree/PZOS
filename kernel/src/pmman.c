@@ -6,7 +6,7 @@ static uint8_t *buddy = NULL;
 static size_t buddy_off[8];
 static size_t buddy_size;
 
-void init_pmman(struct limine_memmap_response *mmap, intptr_t hhdm_off, intptr_t kernel_base, intptr_t kernel_size) {
+void pmman_init(struct limine_memmap_response *mmap, intptr_t hhdm_off, intptr_t kernel_base, intptr_t kernel_size) {
 	// TODO: Clean up memory map by merging blocks and resolving overlaps
 
 	size_t count = mmap->entry_count;
@@ -20,6 +20,4 @@ void init_pmman(struct limine_memmap_response *mmap, intptr_t hhdm_off, intptr_t
 	}
 
 	// TODO: Allocate and populate buddy bitmap
-
-	return 0;
 }

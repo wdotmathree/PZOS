@@ -5,6 +5,6 @@
 #include <limine.h>
 #include <stddef.h>
 
-void init_pmman(struct limine_memmap_response *mmap, intptr_t hhdm_off, intptr_t kernel_base, intptr_t kernel_size);
+void pmman_init(struct limine_memmap_response *mmap, intptr_t hhdm_off, intptr_t kernel_base, intptr_t kernel_size);
 
 #endif
