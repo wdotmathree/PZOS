@@ -31,7 +31,7 @@ libc.a: $(COBJS)
 	$(AS) $(ASFLAGS) $< -o $@
 
 %_c.k.o: %.c Makefile $(shell find ./include ../kernel/include ../kernel/arch/$(ARCH) ../limine)
-	$(CC) $(CFLAGS) -c $< -o $@ -D__is_libk -ffreestanding -I../kernel/include -I../limine -mcmodel=kernel -mgeneral-regs-only
+	$(CC) $(CFLAGS) -c $< -o $@ -D__is_libk -ffreestanding -I../kernel/include -I../kernel/arch/$(ARCH) -I../limine -mcmodel=kernel -mgeneral-regs-only
 
 %_asm.k.o: %.asm Makefile
 	$(AS) $(ASFLAGS) $< -o $@ -D__is_libk

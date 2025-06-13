@@ -27,17 +27,17 @@ void pmman_init(struct limine_memmap_response *mmap, intptr_t hhdm_off, intptr_t
 	size_t count = mmap->entry_count;
 
 	size_t mem_size = 0;
-	printf("PMMAN: Iterating through %u memory map entries...\n", count);
+	printf("PMMAN: Iterating through %zu memory map entries...\n", count);
 	for (size_t i = 0; i < count; i++) {
 		struct limine_memmap_entry *entry = mmap->entries[i];
-		printf("PMMAN: base=0x%x length=0x%x type=%s\n", entry->base, entry->length, MEM_TYPES[entry->type]);
+		printf("PMMAN: base=%p length=%p type=%s\n", entry->base, entry->length, MEM_TYPES[entry->type]);
 		if (entry->type == LIMINE_MEMMAP_USABLE || entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
 			max_addr = entry->base + entry->length - 1;
 			mem_size += entry->length;
 		}
 	}
-	printf("PMMAN: Maximum usable byte at 0x%x\n", max_addr);
-	printf("PMMAN: Usable memory size: %u bytes\n", mem_size);
+	printf("PMMAN: Maximum usable byte at %p\n", max_addr);
+	printf("PMMAN: Usable memory size: %zu bytes\n", mem_size);
 
 	size_t bitcnt = max_addr / 0x1000 + 1;
 	for (int i = 1; i < 8; i++) {
@@ -79,10 +79,10 @@ void pmman_init(struct limine_memmap_response *mmap, intptr_t hhdm_off, intptr_t
 			size_t bits = j % 8;
 			size_t subbytes = j * 2 / 8;
 			size_t subbits = (j * 2) % 8;
-			uint8_t mask = (1 << bits) | (1 << (bits + 1));
+			uint8_t mask = (1 << subbits) | (1 << (subbits + 1));
 			if ((buddy[buddy_off[i - 1] + subbytes] & mask) == mask)
 				buddy[buddy_off[i] + byte] |= (1 << bits);
 		}
 	}
-	printf("PMMAN: Buddy allocator initialized at 0x%x with size %u bytes\n", buddy, buddy_size);
+	printf("PMMAN: Buddy allocator initialized at %p with size %zu bytes\n", buddy, buddy_size);
 }

@@ -22,7 +22,7 @@ debug: kernel.elf
 kernel.elf: $(OBJS) link.ld ../libc/libk.a
 	$(CC) -T link.ld -o kernel.elf $(OBJS) -L../libc -nostdlib -lk -lgcc
 
-../libc/libk.a:
+../libc/libk.a: $(shell find ../libc -name "*.c" -o -name "*.asm")
 	$(MAKE) -C ../libc $(TARGET)
 
 src/tty.o: glyphs.bin

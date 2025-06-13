@@ -86,13 +86,13 @@ void kinit(void) {
 		panic("Memory map request failed");
 	if (addr_request.response == NULL)
 		panic("Could not get physical address of kernel");
-	printf("Kernel loaded at physical address 0x%x\nHHDM offset is 0x%x\n", addr_request.response->physical_base, hhdm_request.response->offset);
+	printf("Kernel loaded at physical address %p\nHHDM offset is %p\n", addr_request.response->physical_base, hhdm_request.response->offset);
 	pmman_init(memory_map_request.response, hhdm_request.response->offset, addr_request.response->physical_base, (uint64_t)&_binary_size);
 	tty_puts("Buddy allocator initialization finished.\n");
 
 	size_t pt4;
 	asm("mov %0, cr3" : "=r"(pt4));
-	printf("Top level page table is at 0x%x\n", pt4);
+	printf("Top level page table is at %p\n", pt4);
 
 	kmain();
 	panic("kmain returned unexpectedly");

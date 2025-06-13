@@ -1,6 +1,7 @@
 ### Maintenance tasks
   - Find bugs and clean up code (especially tty and printf)
   - Review and adjust folder structure as needed during future development
+  - Safety concerns
 
 ### Development steps
   1. Implement allocators
