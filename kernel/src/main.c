@@ -86,8 +86,13 @@ void kinit(void) {
 		panic("Memory map request failed");
 	if (addr_request.response == NULL)
 		panic("Could not get physical address of kernel");
+	printf("Kernel loaded at physical address 0x%x\nHHDM offset is 0x%x\n", addr_request.response->physical_base, hhdm_request.response->offset);
 	pmman_init(memory_map_request.response, hhdm_request.response->offset, addr_request.response->physical_base, (uint64_t)&_binary_size);
 	tty_puts("Buddy allocator initialization finished.\n");
+
+	size_t pt4;
+	asm("mov %0, cr3" : "=r"(pt4));
+	printf("Top level page table is at 0x%x\n", pt4);
 
 	kmain();
 	panic("kmain returned unexpectedly");
@@ -96,17 +101,17 @@ void kinit(void) {
 void kmain(void) {
 	tty_puts("\nPZOS booted successfully!\n");
 
-	tty_puts("Printing fibonacci sequence:\n");
-	size_t a = 1, b = 1;
-	while (true) {
-		size_t c = a + b;
-		printf("%u\n", a);
-		a = b;
-		b = c;
+	// tty_puts("Printing fibonacci sequence:\n");
+	// size_t a = 1, b = 1;
+	// while (true) {
+	// 	size_t c = a + b;
+	// 	printf("%u\n", a);
+	// 	a = b;
+	// 	b = c;
 
-		for (int i = 0; i < 300000000; i++)
-			nop();
-	}
+	// 	for (int i = 0; i < 300000000; i++)
+	// 		nop();
+	// }
 
 	while (true)
 		halt();

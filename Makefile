@@ -59,13 +59,13 @@ PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 
 test: img
 	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -bios /usr/share/OVMF/OVMF_CODE.fd -serial mon:stdio -nographic
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -serial mon:stdio -nographic
-	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio
+	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio
+	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic
 
 debug: TARGET := debug
 debug: img
 	# gdb -ex "target remote :1234" -ex "file kernel/kernel.elf" -ex "b kmain" -ex "c"
-	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -serial mon:stdio -nographic -s -S
+	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -s -S
 
 clean:
 	$(MAKE) -C kernel clean

@@ -13,7 +13,7 @@ int serial_init(void) {
 	outb(COM1 + 3, 0x80); // Divide baud rate
 	outb(COM1 + 0, 0x03); // ... to 38400 baud (lo byte)
 	outb(COM1 + 1, 0x00); // ... (hi byte)
-	outb(COM1 + 3, 0x03); // 8 bits, no parity, one stop bit
+	outb(COM1 + 3, 0x03); // 8 bits, no parity, 1 stop bit
 	outb(COM1 + 2, 0x07); // Enable and clear FIFOs, 1 byte threshold
 	outb(COM1 + 4, 0x13); // Enable RTS/DTR, loopback for testing
 
