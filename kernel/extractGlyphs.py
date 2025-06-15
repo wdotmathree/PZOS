@@ -3,9 +3,9 @@ from PIL import Image, ImageDraw, ImageFont
 import numpy as np
 
 WIDTH = 9
-HEIGHT = 18
+HEIGHT = 17
 SIZE = 16
-ADJUST_HEIGHT = 2
+ADJUST_HEIGHT = 3
 
 font = TTFont("in.ttf")
 img_font = ImageFont.truetype("in.ttf", SIZE)

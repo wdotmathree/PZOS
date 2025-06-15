@@ -6,12 +6,13 @@
 #include <string.h>
 
 #include <kernel/ansi.h>
+#include <kernel/defines.h>
 #include <kernel/serial.h>
 
 INCBIN(GLYPHS, "glyphs.bin");
 
 #define GLYPH_WIDTH 9
-#define GLYPH_HEIGHT 18
+#define GLYPH_HEIGHT 17
 #define TAB_WIDTH 8
 
 #define color_pair(fg, bg) ((((uint64_t)(bg)) << 32) | (fg))
@@ -22,16 +23,23 @@ static uint64_t tty_color;
 static size_t tty_width;
 static size_t tty_height;
 
-static uint32_t *tty_buf;
+static uint8_t *tty_buf;
+static uint8_t backbuf[1920 * 1080 * 4 * 2];
+static uint32_t used[128]; // Max lengths of each line in multiples of GLYPH_WIDTH
 static size_t buf_width;
 static size_t buf_height;
+static size_t buf_pitch;
 
 static void tty_drawcursor(void) {
 	// Bottom of current cell
-	size_t index = (tty_row * GLYPH_HEIGHT + (int)(0.9 * GLYPH_HEIGHT)) * buf_width + tty_col * GLYPH_WIDTH;
+	const size_t x = tty_col * GLYPH_WIDTH;
+	const size_t y = tty_row * GLYPH_HEIGHT + (int)(0.9 * GLYPH_HEIGHT);
+	size_t idx = buf_pitch * y + 4 * x;
 	for (int i = 0; i < GLYPH_WIDTH; i++) {
-		tty_buf[index + i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
-		tty_buf[index + buf_width + i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		*(uint32_t *)(tty_buf + idx) = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		*(uint32_t *)(tty_buf + idx + buf_pitch) = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		*(uint32_t *)(backbuf + idx) = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		*(uint32_t *)(backbuf + idx + buf_pitch) = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
 	}
 }
 
@@ -61,6 +69,7 @@ void tty_init(const struct limine_framebuffer *framebuffer) {
 	tty_buf = framebuffer->address;
 	buf_width = framebuffer->width;
 	buf_height = framebuffer->height;
+	buf_pitch = framebuffer->pitch;
 	tty_width = framebuffer->width / GLYPH_WIDTH;
 	tty_height = framebuffer->height / GLYPH_HEIGHT;
 	tty_color = color_pair(ANSI_3BIT_COLORS[ANSI_COLOR_WHITE], ANSI_3BIT_COLORS[ANSI_COLOR_BLACK]);
@@ -68,7 +77,9 @@ void tty_init(const struct limine_framebuffer *framebuffer) {
 }
 
 void tty_clear(void) {
-	memset(tty_buf, 0, buf_width * buf_height * 4);
+	memset(tty_buf, 0, buf_pitch * buf_height * 4);
+	memset(backbuf, 0, buf_pitch * buf_height * 4);
+	memset(used, 0, tty_height * sizeof(uint32_t));
 	tty_row = 0;
 	tty_col = 0;
 	tty_drawcursor();
@@ -92,26 +103,44 @@ static uint32_t mix(uint64_t color, uint8_t alpha) {
 }
 
 static void tty_clearcell(size_t x, size_t y) {
-	size_t index = y * GLYPH_HEIGHT * buf_width + x * GLYPH_WIDTH;
+	size_t index = buf_pitch * y * GLYPH_HEIGHT + 4 * x * GLYPH_WIDTH;
 	for (int i = 0; i < GLYPH_HEIGHT; i++) {
-		memset(tty_buf + index + i * buf_width, 0, GLYPH_WIDTH * 4);
+		memset(tty_buf + index, 0, GLYPH_WIDTH * 4);
+		memset(backbuf + index, 0, GLYPH_WIDTH * 4);
+		index += buf_pitch;
 	}
 }
 
 static void tty_blitchar(char c, size_t x, size_t y) {
-	size_t index = y * GLYPH_HEIGHT * buf_width + x * GLYPH_WIDTH;
+	size_t index = buf_pitch * y * GLYPH_HEIGHT + 4 * x * GLYPH_WIDTH;
 	for (int y = 0; y < GLYPH_HEIGHT; y++) {
 		for (int x = 0; x < GLYPH_WIDTH; x++) {
 			size_t glyph_index = ((c - 0x20) * GLYPH_HEIGHT + y) * GLYPH_WIDTH + x;
 			uint32_t pixel = mix(tty_color, gGLYPHSData[glyph_index]);
-			tty_buf[index + x + y * buf_width] = pixel;
+			((uint32_t *)(tty_buf + index))[x] = pixel;
+			((uint32_t *)(backbuf + index))[x] = pixel;
 		}
+		index += buf_pitch;
 	}
+	used[y] = max(used[y], x + 1);
 }
 
 static void tty_scroll(void) {
-	memmove(tty_buf, tty_buf + GLYPH_HEIGHT * buf_width, (tty_height - 1) * GLYPH_HEIGHT * buf_width * 4);
-	memset(tty_buf + ((tty_height - 1) * GLYPH_HEIGHT) * buf_width, 0, GLYPH_HEIGHT * buf_width * 4);
+	for (size_t i = 0; i < tty_height; i++) {
+		size_t dst = buf_pitch * i * GLYPH_HEIGHT;
+		size_t src = buf_pitch * (i + 1) * GLYPH_HEIGHT;
+		size_t cnt = max(used[i], used[i + 1]);
+		for (size_t j = 0; j < GLYPH_HEIGHT; j++) {
+			memcpy(tty_buf + dst, backbuf + src, cnt * GLYPH_WIDTH * 4);
+			memcpy(backbuf + dst, backbuf + src, cnt * GLYPH_WIDTH * 4);
+			dst += buf_pitch;
+			src += buf_pitch;
+		}
+		used[i] = used[i + 1];
+	}
+	memset(backbuf + ((tty_height - 1) * GLYPH_HEIGHT) * buf_pitch, 0, used[tty_height - 1] * GLYPH_HEIGHT * 4);
+	memset(tty_buf + ((tty_height - 1) * GLYPH_HEIGHT) * buf_pitch, 0, used[tty_height - 1] * GLYPH_HEIGHT * 4);
+	used[tty_height - 1] = 0;
 }
 
 /// TODO: Add buffering to parse control sequences spanning multiple print calls
@@ -167,10 +196,10 @@ static int parseescape(const char *s) {
 			case 39: // Reset foreground color
 				tty_color = color_pair(ANSI_3BIT_COLORS[ANSI_COLOR_WHITE], tty_color >> 32);
 				break;
-			case 40 ... 47:
+			case 40 ... 47: // Background color
 				tty_color = color_pair(tty_color & 0xffffffff, ANSI_3BIT_COLORS[args[j] - 40]);
 				break;
-			case 100 ... 107: // Background color
+			case 100 ... 107: // ...
 				tty_color = color_pair(tty_color & 0xffffffff, ANSI_4BIT_COLORS[args[j] - 100 + 8]);
 				break;
 			case 48: // Special background color

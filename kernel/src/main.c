@@ -59,7 +59,7 @@ void kinit(void) {
 		char c = s[0];
 		for (int i = 0; i < 80 * 25; i++) {
 			vga[i] = (0x0f << 8) | c;
-			if (c)
+			if (c != '\0')
 				c = s[i + 1];
 		}
 		halt();
@@ -94,9 +94,9 @@ void kinit(void) {
 	asm("mov %0, cr3" : "=r"(pt4));
 	printf("Top level page table is at %p\n\n", pt4);
 
-	size_t npages = 2097010;
-	// size_t npages = 1552260;
-	const size_t NALLOCS = 80;
+	// size_t npages = 2097010;
+	size_t npages = 1552260;
+	const size_t NALLOCS = 10;
 	struct palloc_info *heads[NALLOCS];
 	for (int i = 0; i < NALLOCS; i++) {
 		size_t n = npages / NALLOCS;
@@ -104,10 +104,15 @@ void kinit(void) {
 			n += npages % NALLOCS;
 		struct palloc_info *info = kpalloc(n);
 		heads[i] = info;
-		info->_ign = n;
+		if (info != NULL)
+			info->_ign = n;
 	}
 	for (int i = 0; i < NALLOCS; i++) {
 		struct palloc_info *info = heads[i];
+		if (info == NULL) {
+			printf("kpalloc failed for allocation %d\n", i);
+			continue;
+		}
 		struct page_block *block = info->head;
 		while (block) {
 			printf("Allocated %4zu pages at %p\n", block->npages, block->addr);
@@ -116,6 +121,8 @@ void kinit(void) {
 		printf("Requested %zu pages, %zu could not be allocated\n", info->_ign, info->rem);
 	}
 	for (int i = 0; i < NALLOCS; i++) {
+		if (heads[i] == NULL)
+			continue;
 		struct page_block *block = heads[i]->head;
 		while (block) {
 			kpfree(block->addr, block->npages);
@@ -134,12 +141,12 @@ void kmain(void) {
 	// size_t a = 1, b = 1;
 	// while (true) {
 	// 	size_t c = a + b;
-	// 	printf("%u\n", a);
+	// 	printf("%zu\n", a);
 	// 	a = b;
 	// 	b = c;
 
-	// 	for (int i = 0; i < 300000000; i++)
-	// 		nop();
+	// 	// for (int i = 0; i < 300000000; i++)
+	// 	// 	nop();
 	// }
 
 	while (true)
