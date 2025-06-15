@@ -17,7 +17,7 @@ __attribute__((noreturn)) void _panic(const char *, struct isr_frame_t *);
 
 __attribute__((noreturn)) static inline void halt(void) {
 	while (1) {
-		asm("cli;hlt");
+		asm("hlt");
 	}
 }
 

@@ -47,7 +47,7 @@ struct isr_frame_t {
 	uint64_t isr_ss;
 };
 
-void idt_load(void);
+void isr_init(void);
 
 void register_isr(uint8_t num, void *handler, uint8_t dpl);
 

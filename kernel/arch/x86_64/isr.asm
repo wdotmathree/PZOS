@@ -1,7 +1,7 @@
 section .text
 
 global isr_stub_0
-extern isr_dispatcher
+extern isr_vectors
 
 isr_stub:
 	push rax
@@ -21,7 +21,8 @@ isr_stub:
 	push r15
 
 	mov rdi, rsp
-	call isr_dispatcher
+	mov rax, [rsp + 15 * 8] ; Interrupt number
+	call [isr_vectors + rax * 8]
 	mov rsp, rax
 
 	pop r15

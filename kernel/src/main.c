@@ -48,6 +48,7 @@ static volatile LIMINE_REQUESTS_END_MARKER;
 __attribute__((noreturn)) void kmain(void);
 
 void kinit(void) {
+	asm("cli");
 	if (!LIMINE_BASE_REVISION_SUPPORTED)
 		halt();
 	if (hhdm_request.response == NULL)
@@ -67,13 +68,8 @@ void kinit(void) {
 	tty_init(framebuffer_request.response->framebuffers[0]);
 	tty_puts("PZOS kernel initializing...\n");
 
-	// Initialize IDT
-	extern void isr_stub_0;
-	for (int i = 0; i < IDT_SIZE; i++) {
-		register_isr(i, &isr_stub_0 + (16 * i), 0);
-	}
-	idt_load();
-	asm("sti");
+	// Initialize interrupt handlers
+	isr_init();
 
 	// Initialize serial port
 	if (serial_init())
@@ -136,18 +132,6 @@ void kinit(void) {
 
 void kmain(void) {
 	tty_puts("\nPZOS booted successfully!\n");
-
-	// tty_puts("Printing fibonacci sequence:\n");
-	// size_t a = 1, b = 1;
-	// while (true) {
-	// 	size_t c = a + b;
-	// 	printf("%zu\n", a);
-	// 	a = b;
-	// 	b = c;
-
-	// 	// for (int i = 0; i < 300000000; i++)
-	// 	// 	nop();
-	// }
 
 	while (true)
 		halt();
