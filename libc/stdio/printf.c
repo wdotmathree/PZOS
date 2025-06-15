@@ -14,8 +14,6 @@
 #define puts(s) tty_puts(s)
 #endif
 
-// TODO: Add support for flags, width, precision, and length modifiers
-// Our current implementation is invalid as it zero extends negative values
 int vprintf(const char *format, va_list args) {
 	int count = 0;
 	while (true) {

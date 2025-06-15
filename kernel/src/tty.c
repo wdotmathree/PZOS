@@ -114,7 +114,7 @@ static void tty_scroll(void) {
 	memset(tty_buf + ((tty_height - 1) * GLYPH_HEIGHT) * buf_width, 0, GLYPH_HEIGHT * buf_width * 4);
 }
 
-// TODO: Add buffering to parse control sequences spanning multiple print calls
+/// TODO: Add buffering to parse control sequences spanning multiple print calls
 static int parseescape(const char *s) {
 	int i = 0;
 	if (s[i++] != '[') {
@@ -145,7 +145,7 @@ static int parseescape(const char *s) {
 			case 30 ... 37: // Foreground color
 				tty_color = color_pair(ANSI_3BIT_COLORS[args[j] - 30], tty_color >> 32);
 				break;
-			case 90 ... 97: /// ...
+			case 90 ... 97: // ...
 				tty_color = color_pair(ANSI_4BIT_COLORS[args[j] - 90 + 8], tty_color >> 32);
 				break;
 			case 38: // Special foreground color
