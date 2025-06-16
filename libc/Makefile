@@ -18,10 +18,10 @@ debug: CFLAGS += -g -O0
 debug: ASFLAGS += -gdwarf
 debug: libk.a # libc.a
 
-libk.a: $(KOBJS)
+libk.a: $(KOBJS) Makefile
 	$(AR) rcs libk.a $(KOBJS)
 
-libc.a: $(COBJS)
+libc.a: $(COBJS) Makefile
 	$(AR) rcs libc.a $(COBJS)
 
 %_c.o: %.c Makefile $(shell find ./include)
@@ -30,8 +30,8 @@ libc.a: $(COBJS)
 %_asm.o: %.asm Makefile
 	$(AS) $(ASFLAGS) $< -o $@
 
-%_c.k.o: %.c Makefile $(shell find ./include ../kernel/include ../kernel/arch/$(ARCH) ../limine)
-	$(CC) $(CFLAGS) -c $< -o $@ -D__is_libk -ffreestanding -I../kernel/include -I../kernel/arch/$(ARCH) -I../limine -mcmodel=kernel -mgeneral-regs-only
+%_c.k.o: %.c Makefile $(shell find ./include ../kernel/include ../kernel/arch/$(ARCH) ../limine -name "*.h")
+	$(CC) $(CFLAGS) -c $< -o $@ -D__is_libk -ffreestanding -I../kernel/include -I../kernel/arch/$(ARCH) -I../limine -mcmodel=kernel -mno-avx
 
 %_asm.k.o: %.asm Makefile
 	$(AS) $(ASFLAGS) $< -o $@ -D__is_libk

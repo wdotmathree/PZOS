@@ -5,7 +5,7 @@ CSRCS := $(shell find src arch/$(ARCH) -name "*.c")
 OBJS := $(CSRCS:.c=_c.o) $(ASMSRCS:.asm=_asm.o)
 
 ASFLAGS := -f elf64
-CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I./include -I./arch/$(ARCH) -I../libc/include -I../limine -mno-red-zone -masm=intel -ffreestanding -mcmodel=kernel -mgeneral-regs-only
+CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I./include -I./arch/$(ARCH) -I../libc/include -I../limine -mno-red-zone -masm=intel -ffreestanding -mcmodel=kernel -mno-avx
 
 include arch/$(ARCH)/make.config
 
@@ -25,7 +25,7 @@ kernel.elf: $(OBJS) link.ld ../libc/libk.a
 ../libc/libk.a: $(shell find ../libc -name "*.c" -o -name "*.asm")
 	$(MAKE) -C ../libc $(TARGET)
 
-src/tty.o: glyphs.bin
+src/tty_c.o: glyphs.bin
 %_c.o: %.c Makefile $(shell find ../libc/include ./include ./arch/$(ARCH) ../limine -name "*.h")
 	$(CC) $(CFLAGS) -c $< -o $@
 

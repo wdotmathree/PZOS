@@ -3,6 +3,7 @@
   - Review and adjust folder structure as needed during future development
   - Safety concerns
   - Thread safety and re-entrancy (especially in memory management)
+  - Profile/optimize code
 
 ### Development steps
   1. Implement allocators

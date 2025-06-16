@@ -65,6 +65,17 @@ void kinit(void) {
 		}
 		halt();
 	}
+
+	// Enable SSE
+	asm volatile("mov rax, cr0;"
+				 "and rax, -5;" // -5 = 0xfb
+				 "or rax, 0x2;"
+				 "mov cr0, rax;"
+				 "mov rax, cr4;"
+				 "or rax, 0x00040600;"
+				 "mov cr4, rax"
+				 : : : "rax");
+
 	tty_init(framebuffer_request.response->framebuffers[0]);
 	tty_puts("PZOS kernel initializing...\n");
 
@@ -89,42 +100,6 @@ void kinit(void) {
 	size_t pt4;
 	asm("mov %0, cr3" : "=r"(pt4));
 	printf("Top level page table is at %p\n\n", pt4);
-
-	// size_t npages = 2097010;
-	size_t npages = 1552260;
-	const size_t NALLOCS = 10;
-	struct palloc_info *heads[NALLOCS];
-	for (int i = 0; i < NALLOCS; i++) {
-		size_t n = npages / NALLOCS;
-		if (i == NALLOCS - 1)
-			n += npages % NALLOCS;
-		struct palloc_info *info = kpalloc(n);
-		heads[i] = info;
-		if (info != NULL)
-			info->_ign = n;
-	}
-	for (int i = 0; i < NALLOCS; i++) {
-		struct palloc_info *info = heads[i];
-		if (info == NULL) {
-			printf("kpalloc failed for allocation %d\n", i);
-			continue;
-		}
-		struct page_block *block = info->head;
-		while (block) {
-			printf("Allocated %4zu pages at %p\n", block->npages, block->addr);
-			block = block->next;
-		}
-		printf("Requested %zu pages, %zu could not be allocated\n", info->_ign, info->rem);
-	}
-	for (int i = 0; i < NALLOCS; i++) {
-		if (heads[i] == NULL)
-			continue;
-		struct page_block *block = heads[i]->head;
-		while (block) {
-			kpfree(block->addr, block->npages);
-			block = block->next;
-		}
-	}
 
 	kmain();
 	panic("kmain returned unexpectedly");

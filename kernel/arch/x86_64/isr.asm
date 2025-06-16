@@ -4,6 +4,9 @@ global isr_stub_0
 extern isr_vectors
 
 isr_stub:
+	sub rsp, 512
+	fxsave [rsp]
+
 	push rax
 	push rbx
 	push rcx
@@ -41,7 +44,9 @@ isr_stub:
 	pop rbx
 	pop rax
 
-	add rsp, 16
+	fxrstor [rsp]
+
+	add rsp, 512 + 16
 	iretq
 
 %assign i 0
