@@ -39,5 +39,5 @@ SECTIONS {
 		*(.note.GNU-stack)
 	}
 
-	_binary_size = (. - 0xffffffff7ffff001) & 0xfffffffffffff000;
+	_binary_size = (. - 0xffffffff80000000 + 0xfff) & -0x1000;
 }

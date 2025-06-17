@@ -1,6 +1,7 @@
 #include <kernel/tty.h>
 
 #include <incbin.h>
+#include <stdalign.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -23,8 +24,10 @@ static uint64_t tty_color;
 static size_t tty_width;
 static size_t tty_height;
 
-static uint8_t *tty_buf;
-static uint8_t backbuf[1920 * 1080 * 4 * 2];
+// idk why but gcc likes putting this in .text?????? so we need to force it into .bss
+/// TODO: Investigate
+__attribute__((section(".bss"))) uint8_t *tty_buf;
+alignas(16) static uint8_t backbuf[1920 * 1080 * 4 * 2];
 static uint32_t used[128]; // Max lengths of each line in multiples of GLYPH_WIDTH
 static size_t buf_width;
 static size_t buf_height;

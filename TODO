@@ -7,10 +7,9 @@
 
 ### Development steps
   1. Implement allocators
-     1. Test buddy allocator
-     2. Think about whether/when we should get rid of Limine's HHDM
-     3. What is a slab allocator?
-     4. Implement an AVL tree for virtual memory
+     1. Should we use a slab allocator?
+     2. Implement an AVL tree for virtual memory
+     3. Write mapping stuff
   2. Make sure our kernel is robust
      1. Investigate libk functions to ensure they are safe
   3. Figure out APIC and/or I/O APIC

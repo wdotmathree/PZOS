@@ -4,9 +4,6 @@ global isr_stub_0
 extern isr_vectors
 
 isr_stub:
-	sub rsp, 512
-	fxsave [rsp]
-
 	push rax
 	push rbx
 	push rcx
@@ -24,8 +21,14 @@ isr_stub:
 	push r15
 
 	mov rdi, rsp
-	mov rax, [rsp + 15 * 8] ; Interrupt number
+	sub rsp, 512
+	and rsp, -16
+	fxsave [rsp]
+
+	mov rax, [rdi + 15 * 8] ; Interrupt number
 	call [isr_vectors + rax * 8]
+
+	fxrstor [rsp]
 	mov rsp, rax
 
 	pop r15
@@ -43,8 +46,6 @@ isr_stub:
 	pop rcx
 	pop rbx
 	pop rax
-
-	fxrstor [rsp]
 
 	add rsp, 512 + 16
 	iretq

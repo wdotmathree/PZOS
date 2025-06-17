@@ -9,9 +9,12 @@
 #include <kernel/isr.h>
 
 // As long as `msg` is a string literal, it should hopefully not touch any registers
-#define panic(msg)          \
-	asm volatile("push %0;" \
-				 "int 0x81" : : "rN"(msg))
+#define panic(msg)                              \
+	do {                                        \
+		asm volatile("push %0\n"                \
+					 "int 0x81" : : "rN"(msg)); \
+		__builtin_unreachable();                \
+	} while (0)
 
 __attribute__((noreturn)) void _panic(const char *, struct isr_frame_t *);
 

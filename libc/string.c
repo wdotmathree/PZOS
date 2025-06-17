@@ -17,7 +17,7 @@ void *memcpy(void *__restrict dst, const void *__restrict src, size_t n) {
 	char *d = dst;
 	const char *s = src;
 	while (n >= 16) {
-		asm("movups xmm0, [%0];"
+		asm("movups xmm0, [%0]\n"
 			"movups [%1], xmm0"
 			: : "r"(s), "r"(d) : "xmm0", "memory");
 		d += 16;

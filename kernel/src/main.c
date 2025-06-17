@@ -6,8 +6,8 @@
 #include <stdio.h>
 
 #include <kernel/intrin.h>
+#include <kernel/mman.h>
 #include <kernel/panic.h>
-#include <kernel/pmman.h>
 #include <kernel/serial.h>
 #include <kernel/tty.h>
 
@@ -35,19 +35,19 @@ static volatile struct limine_hhdm_request hhdm_request = {
 	.revision = 0,
 };
 
-__attribute__((used, section(".limine_requests"))) //
-static volatile struct limine_executable_address_request addr_request = {
-	.id = LIMINE_EXECUTABLE_ADDRESS_REQUEST,
-	.revision = 0,
-};
-
 extern void _binary_size;
 
 __attribute__((used, section(".limine_requests_end"))) //
 static volatile LIMINE_REQUESTS_END_MARKER;
+
 __attribute__((noreturn)) void kmain(void);
 
-void kinit(void) {
+__attribute__((naked, noreturn)) void kinit(void) {
+	// Pop the (bogus) return address to get the stack base
+	// Save it in rbp (will be used in mman_init)
+	asm volatile("add rsp, 8\n"
+				 "mov rbp, rsp");
+
 	asm("cli");
 	if (!LIMINE_BASE_REVISION_SUPPORTED)
 		halt();
@@ -67,20 +67,20 @@ void kinit(void) {
 	}
 
 	// Enable SSE
-	asm volatile("mov rax, cr0;"
-				 "and rax, -5;" // -5 = 0xfb
-				 "or rax, 0x2;"
-				 "mov cr0, rax;"
-				 "mov rax, cr4;"
-				 "or rax, 0x00040600;"
+	asm volatile("mov rax, cr0\n"
+				 "and rax, -5\n" // -5 = 0xfb
+				 "or rax, 0x2\n"
+				 "mov cr0, rax\n"
+				 "mov rax, cr4\n"
+				 "or rax, 0x00040600\n"
 				 "mov cr4, rax"
 				 : : : "rax");
 
-	tty_init(framebuffer_request.response->framebuffers[0]);
-	tty_puts("PZOS kernel initializing...\n");
-
 	// Initialize interrupt handlers
 	isr_init();
+
+	tty_init(framebuffer_request.response->framebuffers[0]);
+	tty_puts("PZOS kernel initializing...\n");
 
 	// Initialize serial port
 	if (serial_init())
@@ -91,21 +91,14 @@ void kinit(void) {
 	// Initialize memory management
 	if (memory_map_request.response == NULL)
 		panic("Memory map request failed");
-	if (addr_request.response == NULL)
-		panic("Could not get physical address of kernel");
-	printf("Kernel loaded at physical address %p\nHHDM offset is %p\n", addr_request.response->physical_base, hhdm_request.response->offset);
-	pmman_init(memory_map_request.response, hhdm_request.response->offset, addr_request.response->physical_base, (uint64_t)&_binary_size);
-	tty_puts("Buddy allocator initialization finished.\n");
 
-	size_t pt4;
-	asm("mov %0, cr3" : "=r"(pt4));
-	printf("Top level page table is at %p\n\n", pt4);
+	extern uint8_t *tty_buf;
+	mman_init(memory_map_request.response, &tty_buf, hhdm_request.response->offset);
 
 	kmain();
-	panic("kmain returned unexpectedly");
 }
 
-void kmain(void) {
+__attribute__((noreturn)) void kmain(void) {
 	tty_puts("\nPZOS booted successfully!\n");
 
 	while (true)
