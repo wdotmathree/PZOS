@@ -24,8 +24,6 @@ static uint64_t tty_color;
 static size_t tty_width;
 static size_t tty_height;
 
-// idk why but gcc likes putting this in .text?????? so we need to force it into .bss
-/// TODO: Investigate
 __attribute__((section(".bss"))) uint8_t *tty_buf;
 alignas(16) static uint8_t backbuf[1920 * 1080 * 4 * 2];
 static uint32_t used[128]; // Max lengths of each line in multiples of GLYPH_WIDTH
@@ -39,10 +37,10 @@ static void tty_drawcursor(void) {
 	const size_t y = tty_row * GLYPH_HEIGHT + (int)(0.9 * GLYPH_HEIGHT);
 	size_t idx = buf_pitch * y + 4 * x;
 	for (int i = 0; i < GLYPH_WIDTH; i++) {
-		*(uint32_t *)(tty_buf + idx) = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
-		*(uint32_t *)(tty_buf + idx + buf_pitch) = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
-		*(uint32_t *)(backbuf + idx) = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
-		*(uint32_t *)(backbuf + idx + buf_pitch) = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		((uint32_t *)(tty_buf + idx))[i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		((uint32_t *)(tty_buf + idx + buf_pitch))[i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		((uint32_t *)(backbuf + idx))[i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		((uint32_t *)(backbuf + idx + buf_pitch))[i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
 	}
 }
 
