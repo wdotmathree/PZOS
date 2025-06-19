@@ -28,7 +28,8 @@ static uint64_t *page_stack_base;
 // Initializes our physical memory allocator and replaces Limine's page tables
 // Virtual Map: (Below are PAGE NUMBERS, not addresses)
 // `0x800000000-0x8000007ff`/`100.000.000.000-100.000.003.1ff`: Kernel stack (Only map first page, rest is on-demand)
-// `0x800000800-0x800000xxx`/`100.000.004.###-100.000.00x.xxx`: Framebuffer (Mapped using large pages if possible)
+// `0x800000800-0x80000xxxx`/`100.000.004.###-100.000.0xx.xxx`: Framebuffer (Mapped using large pages if possible)
+// `0x800000000-0x800000000`/`100.000.100.000-100.000.100.00x`: Temporary mapping for memory map pointers
 // `0xff0000000-0xff7ffffff`/`1fe.000.000.000-1fe.1ff.1ff.1ff`: Recursive page table (Second last PML4 entry)
 // `0xff8000000-0xfffffxxxx`/`1ff.000.000.000-1ff.1ff.1xx.xxx`: Memory management stuff (bitmap and page stack)
 // `0xfffff8000-0xfffffxxxx`/`1ff.1ff.1c0.000-1ff.1ff.1xx.xxx`: Kernel text and data
@@ -157,6 +158,22 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		framebuf_size -= 0x1000;
 	}
 
+	// Map the pages containing memory map pointers
+	ptr = (uintptr_t)mmap->entries - hhdm_off;
+	vptr = BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, 0);
+	uintptr_t end = (uintptr_t)(mmap->entries + mmap->entry_count) - 1 - hhdm_off;
+	pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(pml4[0x100]) + hhdm_off);
+	pd = (uint64_t *)(TABLE_ENTRY_ADDR(pdpt[0x000]) + hhdm_off);
+	pt = (uint64_t *)(hhdm_off + kpalloc_one());
+	pd[0x100] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	memset(pt, 0, 0x1000);
+	mmap->entries = (struct limine_memmap_response **)vptr;
+	while (ptr <= end) {
+		pt[LINADDR_PTE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+		ptr += 0x1000;
+		vptr += 0x1000;
+	};
+
 	// Recursive page table entry
 	// Using this requires us to map every non-page entry as R/W so we can modify tables
 	pml4[0x1fe] = ((uintptr_t)pml4 - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PWT;
@@ -205,8 +222,6 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		ptr += 0x1000;
 		size -= 0x1000;
 	}
-
-	/// TODO: Add temporary mapping for our memory map (just the pointers since we can use library functions to demand allocate the entries)
 
 	// Prepare for page table switch
 	*framebuf = (uint8_t *)0xffff800000800000;
