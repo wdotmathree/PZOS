@@ -139,19 +139,19 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	if ((ptr & 0x1fffff) == 0) {
 		// Framebuffer is large page aligned
 		while (framebuf_size >= 0x200000) {
-			pd[LINADDR_PD(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WC);
+			pd[LINADDR_PDE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WC);
 			ptr += 0x200000;
 			vptr += 0x200000;
 			framebuf_size -= 0x200000;
 		}
 	}
 	while (framebuf_size > 0) {
-		if (pd[LINADDR_PD(vptr)] == 0) {
+		if (pd[LINADDR_PDE(vptr)] == 0) {
 			pt = (uint64_t *)(hhdm_off + kpalloc_one());
-			pd[LINADDR_PD(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			pd[LINADDR_PDE(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pt, 0, 0x1000);
 		}
-		pt[LINADDR_PT(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WC);
+		pt[LINADDR_PTE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WC);
 		ptr += 0x1000;
 		vptr += 0x1000;
 		framebuf_size -= 0x1000;
@@ -191,17 +191,17 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	vptr = 0xfffff80000000000;
 	intptr_t size = reserve * 0x1000;
 	while (size > 0) {
-		if (pdpt[LINADDR_PDPT(vptr)] == 0) {
+		if (pdpt[LINADDR_PDPTE(vptr)] == 0) {
 			pd = (uint64_t *)(hhdm_off + kpalloc_one());
-			pdpt[LINADDR_PDPT(vptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			pdpt[LINADDR_PDPTE(vptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pd, 0, 0x1000);
 		}
-		if (pd[LINADDR_PD(vptr)] == 0) {
+		if (pd[LINADDR_PDE(vptr)] == 0) {
 			pt = (uint64_t *)(hhdm_off + kpalloc_one());
-			pd[LINADDR_PD(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			pd[LINADDR_PDE(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pt, 0, 0x1000);
 		}
-		pt[LINADDR_PT(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+		pt[LINADDR_PTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
 		ptr += 0x1000;
 		size -= 0x1000;
 	}

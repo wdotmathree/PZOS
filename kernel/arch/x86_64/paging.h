@@ -29,10 +29,18 @@
 #define PAGE_TYPE(x) (((((x) >> 2) & 1) * PAGE_PAT) | ((((x) >> 1) & 1) * PAGE_PCD) | (((x) & 1) * PAGE_PWT))
 
 // Address conversion macros
-#define LINADDR_PML4(addr) (((addr) >> 39) & 0x1ff)
-#define LINADDR_PDPT(addr) (((addr) >> 30) & 0x1ff)
-#define LINADDR_PD(addr) (((addr) >> 21) & 0x1ff)
-#define LINADDR_PT(addr) (((addr) >> 12) & 0x1ff)
+#define LINADDR_PML4E(addr) (((addr) >> 39) & 0x1ff)
+#define LINADDR_PDPTE(addr) (((addr) >> 30) & 0x1ff)
+#define LINADDR_PDE(addr) (((addr) >> 21) & 0x1ff)
+#define LINADDR_PTE(addr) (((addr) >> 12) & 0x1ff)
+#define LINADDR_OFF(addr) ((addr) & 0xfff)
 #define TABLE_ENTRY_ADDR(entry) ((entry) & 0x07fffffffffff000)
+#define BUILD_LINADDR(pml4, pdpt, pd, pt, offset) \
+	(((uint64_t)(pml4) << 39) | ((uint64_t)(pdpt) << 30) | ((uint64_t)(pd) << 21) | ((uint64_t)(pt) << 12) | (offset))
+#define BUILD_PAGENUM(pml4, pdpt, pd, pt) \
+	(((uint64_t)(pml4) << 27) | ((uint64_t)(pdpt) << 18) | ((uint64_t)(pd) << 9) | (pt))
+
+#define invlpg(addr) \
+	asm("invlpg [%0]" : : "r"((void *)(addr)) : "memory")
 
 #endif

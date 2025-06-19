@@ -46,9 +46,10 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	// Pop the (bogus) return address to get the stack base
 	// Save it in rbp (will be used in mman_init)
 	asm volatile("add rsp, 8\n"
-				 "mov rbp, rsp");
+				 "mov rbp, rsp"
+				 : : : "memory");
 
-	asm("cli");
+	asm volatile("cli");
 	if (!LIMINE_BASE_REVISION_SUPPORTED)
 		halt();
 	if (hhdm_request.response == NULL)
