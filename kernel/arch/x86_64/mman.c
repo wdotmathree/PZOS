@@ -8,6 +8,7 @@
 #include <kernel/paging.h>
 #include <kernel/panic.h>
 #include <kernel/tty.h>
+#include <kernel/vmem.h>
 
 static const char *MEM_TYPES[] = {
 	"USABLE",
@@ -159,6 +160,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	}
 
 	// Map the pages containing memory map pointers
+	struct limine_memmap_entry **entries = mmap->entries;
 	ptr = (uintptr_t)mmap->entries - hhdm_off;
 	vptr = BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, 0);
 	uintptr_t end = (uintptr_t)(mmap->entries + mmap->entry_count) - 1 - hhdm_off;
@@ -167,7 +169,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	pt = (uint64_t *)(hhdm_off + kpalloc_one());
 	pd[0x100] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pt, 0, 0x1000);
-	mmap->entries = (struct limine_memmap_response **)vptr;
+	mmap->entries = (struct limine_memmap_entry **)vptr;
 	while (ptr <= end) {
 		pt[LINADDR_PTE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
 		ptr += 0x1000;
@@ -218,8 +220,9 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 			pd[LINADDR_PDE(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pt, 0, 0x1000);
 		}
-		pt[LINADDR_PTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+		pt[LINADDR_PTE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
 		ptr += 0x1000;
+		vptr += 0x1000;
 		size -= 0x1000;
 	}
 
@@ -237,7 +240,24 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	printf("MMAN: Page tables initialized successfully.\n");
 	printf("MMAN: PML4 is at %p\n", (uintptr_t)pml4 - hhdm_off);
 
-	/// TODO: Reclaim bootloader reclaimable memory while keeping our borrowed page tables intact
+	// Reclaim bootloader reclaimable memory while keeping our borrowed page tables intact
+	entries = (struct limine_memmap_entry **)BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, LINADDR_OFF((uintptr_t)entries));
+	for (size_t i = 0; i < count; i++) {
+		uintptr_t old_entry = (uintptr_t)entries[i];
+		struct limine_memmap_entry *entry = (struct limine_memmap_entry *)BUILD_LINADDR(0x180, 0x000, 0x000, 0x000, old_entry - hhdm_off);
+		map_page(entry, (void *)(old_entry - hhdm_off), PAGE_PRESENT | PAGE_NX);
+		if (entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
+			size_t start_page = entry->base / 0x1000;
+			size_t end_page = (entry->base + entry->length - 1) / 0x1000;
+			for (size_t j = start_page; j <= end_page; j++) {
+				if (j < 0x1000000 / 0x1000)
+					bitmap[j / 64] |= (1ULL << (j % 64));
+				else
+					*++page_stack = j;
+			}
+		}
+		unmap_page(entry);
+	}
 
 	printf("MMAN: Memory management initialized successfully.\n");
 }

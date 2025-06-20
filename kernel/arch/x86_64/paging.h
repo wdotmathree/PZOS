@@ -36,11 +36,16 @@
 #define LINADDR_OFF(addr) ((addr) & 0xfff)
 #define TABLE_ENTRY_ADDR(entry) ((entry) & 0x07fffffffffff000)
 #define BUILD_LINADDR(pml4, pdpt, pd, pt, offset) \
-	(((uint64_t)(pml4) << 39) | ((uint64_t)(pdpt) << 30) | ((uint64_t)(pd) << 21) | ((uint64_t)(pt) << 12) | (offset))
+	(((int64_t)(pml4) << (39 + 16) >> 16) | ((uint64_t)(pdpt) << 30) | ((uint64_t)(pd) << 21) | ((uint64_t)(pt) << 12) | (offset))
 #define BUILD_PAGENUM(pml4, pdpt, pd, pt) \
 	(((uint64_t)(pml4) << 27) | ((uint64_t)(pdpt) << 18) | ((uint64_t)(pd) << 9) | (pt))
 
+#define LINADDR_PML4E_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, 0x1fe, LINADDR_PML4E(addr) * 8))
+#define LINADDR_PDPTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, LINADDR_PML4E(addr), LINADDR_PDPTE(addr) * 8))
+#define LINADDR_PDE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, LINADDR_PML4E(addr), LINADDR_PDPTE(addr), LINADDR_PDE(addr) * 8))
+#define LINADDR_PTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, LINADDR_PML4E(addr), LINADDR_PDPTE(addr), LINADDR_PDE(addr), LINADDR_PTE(addr) * 8))
+
 #define invlpg(addr) \
-	asm("invlpg [%0]" : : "r"((void *)(addr)) : "memory")
+	asm volatile("invlpg [%0]" : : "r"((void *)(addr)) : "memory")
 
 #endif
