@@ -47,6 +47,18 @@ struct isr_frame_t {
 	uint64_t isr_ss;
 };
 
+#define KERNEL_CS (1 << 3)
+#define KERNEL_DS (2 << 3)
+#define TSS (5 << 3) // For the future
+
+struct gdt_entry {
+	uint16_t limit_low;
+	uint16_t base_low;
+	uint8_t base_mid;
+	uint16_t flags; // contains limit_high
+	uint8_t base_high;
+} __attribute__((packed));
+
 void isr_init(void);
 
 void register_isr(uint8_t num, void *handler, uint8_t dpl);

@@ -6,8 +6,4 @@
 #error "This file should only be included on x86_64 architecture."
 #endif
 
-#define KERNEL_CS (5 << 3)
-#define KERNEL_DS (6 << 3)
-#define TSS (7 << 3)
-
 #endif

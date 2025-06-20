@@ -8,10 +8,40 @@
 
 struct isr_frame_t *default_isr(struct isr_frame_t *const);
 
+static struct gdt_entry gdt[5] = {
+	{0}, // Null descriptor
+	{0xffff, 0, 0, 0b1010111110011010, 0}, // Kernel code
+	{0xffff, 0, 0, 0b1010111110010010, 0}, // Kernel data
+	{0xffff, 0, 0, 0b1010111111111010, 0}, // User code
+	{0xffff, 0, 0, 0b1010111111110010, 0}, // User data
+};
+
 static struct idt_entry idt[IDT_SIZE];
 struct isr_frame_t *(*isr_vectors[IDT_SIZE])(struct isr_frame_t *const);
 
 void isr_init(void) {
+	// First deal with GDT stuff
+	struct {
+		uint16_t limit;
+		uintptr_t base;
+	} __attribute__((packed)) gdtr = {
+		.limit = sizeof(gdt) - 1,
+		.base = (uintptr_t)gdt
+	};
+	asm volatile("push 1 << 3\n"
+				 "lea rax, [label]\n"
+				 "push rax\n"
+				 "lgdt %0\n"
+				 "retfq\n"
+				 "label:\n"
+				 "mov eax, 2 << 3\n"
+				 "mov ds, ax\n"
+				 "mov es, ax\n"
+				 "mov fs, ax\n"
+				 "mov gs, ax\n"
+				 "mov ss, ax"
+				 : : "m"(gdtr) : "rax", "memory");
+
 	extern void isr_stub_0;
 	for (int i = 0; i < IDT_SIZE; i++) {
 		uintptr_t stub_addr = (uintptr_t)&isr_stub_0 + i * 16;
@@ -33,7 +63,7 @@ void isr_init(void) {
 		.limit = sizeof(idt) - 1,
 		.base = (uintptr_t)idt
 	};
-	asm volatile("lidt %0" : : "m"(idtr));
+	asm volatile("lidt %0" : : "m"(idtr) : "memory");
 }
 
 void register_isr(uint8_t num, void *handler, uint8_t dpl) {
