@@ -29,12 +29,12 @@ install:
 	sudo mount $(file)1 $(MOUNTPOINT)
 	mkdir -p $(MOUNTPOINT)/boot/limine
 	mkdir -p $(MOUNTPOINT)/EFI/BOOT
-	cp kernel/kernel.elf $(MOUNTPOINT)/boot/PZOS.bin
-	cp limine.conf $(MOUNTPOINT)/boot/limine
-	cp limine/limine-bios.sys $(MOUNTPOINT)/boot/limine
-	cp limine/BOOTX64.EFI $(MOUNTPOINT)/EFI/BOOT
-	cp limine/BOOTIA32.EFI $(MOUNTPOINT)/EFI/BOOT
-	cp bg.jpg $(MOUNTPOINT)/boot/limine
+	sudo cp kernel/kernel.elf $(MOUNTPOINT)/boot/PZOS.bin
+	sudo cp limine.conf $(MOUNTPOINT)/boot/limine
+	sudo cp limine/limine-bios.sys $(MOUNTPOINT)/boot/limine
+	sudo cp limine/BOOTX64.EFI $(MOUNTPOINT)/EFI/BOOT
+	sudo cp limine/BOOTIA32.EFI $(MOUNTPOINT)/EFI/BOOT
+	sudo cp bg.jpg $(MOUNTPOINT)/boot/limine
 	sudo umount -l $(MOUNTPOINT)
 
 	sudo mount $(file)2 $(MOUNTPOINT)
@@ -60,8 +60,8 @@ PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 test: img
 	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -bios /usr/share/OVMF/OVMF_CODE.fd -serial mon:stdio -nographic
 	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout
-	qemu-system-x86_64 -cpu max -m 8G -drive file=PZOS.bin,format=raw -d int -D logfile -no-reboot
+	# qemu-system-x86_64 -cpu max -m 8G -drive file=PZOS.bin,format=raw -d int -D logfile -no-reboot
+	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout
 
 debug: TARGET := debug
 debug: img

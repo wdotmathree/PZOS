@@ -187,24 +187,24 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 
 	// Map kernel executable
 	pdpt = (uint64_t *)(hhdm_off + kpalloc_one());
+	memset(pdpt, 0, 0x1000);
 	pml4[0x1ff] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW;
 	// Go through old page tables and copy
 	uint64_t *old_pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pml4[0x1ff]) + hhdm_off);
 	for (size_t i = 0; i < 512; i++) {
 		if (old_pdpt[i] & PAGE_PRESENT) {
-			uintptr_t addr = (uintptr_t)kpalloc_one();
-			pdpt[i] = addr | (old_pdpt[i] & (PAGE_PRESENT | PAGE_RW | PAGE_PS | PAGE_NX));
-			memset((void *)(addr + hhdm_off), 0, 0x1000);
-			pd = (uint64_t *)(addr + hhdm_off);
+			pd = (uint64_t *)(hhdm_off + kpalloc_one());
+			memset(pd, 0, 0x1000);
+			pdpt[i] = ((uintptr_t)pd - hhdm_off) | (old_pdpt[i] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
 			uint64_t *old_pd = (uint64_t *)(TABLE_ENTRY_ADDR(old_pdpt[i]) + hhdm_off);
 			for (size_t j = 0; j < 512; j++) {
 				if (old_pd[j] & PAGE_PRESENT) {
-					addr = (uintptr_t)kpalloc_one();
-					pd[j] = addr | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PS | PAGE_NX));
-					pt = (uint64_t *)(addr + hhdm_off);
+					pt = (uint64_t *)(hhdm_off + kpalloc_one());
+					memset(pt, 0, 0x1000);
+					pd[j] = ((uintptr_t)pt - hhdm_off) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
 					uint64_t *old_pt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pd[j]) + hhdm_off);
 					for (size_t k = 0; k < 512; k++) {
-						pt[k] = old_pt[k] & ~(PAGE_PCD | PAGE_USER);
+						pt[k] = old_pt[k] & ~(PAGE_USER | PAGE_ACCESSED | PAGE_DIRTY);
 					}
 				}
 			}
