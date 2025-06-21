@@ -39,5 +39,6 @@ SECTIONS {
 		*(.note.GNU-stack)
 	}
 
-	_binary_size = (. - 0xffffffff80000000 + 0xfff) & -0x1000;
+	_kernel_end = .;
+	_kernel_size = (. - 0xffffffff80000000 + 0xfff) & -0x1000;
 }

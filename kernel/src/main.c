@@ -35,7 +35,7 @@ static volatile struct limine_hhdm_request hhdm_request = {
 	.revision = 0,
 };
 
-extern void _binary_size;
+extern void _kernel_end;
 
 __attribute__((used, section(".limine_requests_end"))) //
 static volatile LIMINE_REQUESTS_END_MARKER;
@@ -92,9 +92,8 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	// Initialize memory management
 	if (memory_map_request.response == NULL)
 		panic("Memory map request failed");
-
 	extern uint8_t *tty_buf;
-	mman_init(memory_map_request.response, &tty_buf, hhdm_request.response->offset);
+	mman_init(memory_map_request.response, &tty_buf, hhdm_request.response->offset, (uintptr_t)&_kernel_end);
 
 	kmain();
 }

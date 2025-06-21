@@ -60,8 +60,8 @@ PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 test: img
 	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -bios /usr/share/OVMF/OVMF_CODE.fd -serial mon:stdio -nographic
 	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -d int,mmu,cpu_reset,guest_errors -D logfile -no-reboot
-	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout
+	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout
+	qemu-system-x86_64 -cpu max -m 8G -drive file=PZOS.bin,format=raw -d int -D logfile -no-reboot
 
 debug: TARGET := debug
 debug: img

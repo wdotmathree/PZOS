@@ -35,7 +35,7 @@ static uint64_t *page_stack_base;
 // `0xff8000000-0xfffffxxxx`/`1ff.000.000.000-1ff.1ff.1xx.xxx`: Memory management stuff (bitmap and page stack)
 // `0xfffff8000-0xfffffxxxx`/`1ff.1ff.1c0.000-1ff.1ff.1xx.xxx`: Kernel text and data
 // Our definition of "high memory" is everything above **16MiB** (not usable for ISA DMA) instead of the usual 1MiB
-void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_t hhdm_off) {
+void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_t hhdm_off, uintptr_t kernel_end) {
 	// Usable and bootloader reclaimable chunks are guaranteed to not overlap and are page aligned
 	size_t count = mmap->entry_count;
 	size_t max_addr = 0;
@@ -185,27 +185,32 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	asm("mov %0, cr3" : "=r"(old_pml4));
 	old_pml4 = (uint64_t *)((uintptr_t)old_pml4 + hhdm_off);
 
-	// Load old pdpt into pml4 (should contain all kernel mappings)
-	pml4[0x1ff] = TABLE_ENTRY_ADDR(old_pml4[0x1ff]) | PAGE_PRESENT | PAGE_RW | PAGE_PWT;
-	// Go through all page tables to make sure flags are good
-	pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pml4[0x1ff]) + hhdm_off);
+	// Map kernel executable
+	pdpt = (uint64_t *)(hhdm_off + kpalloc_one());
+	pml4[0x1ff] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW;
+	// Go through old page tables and copy
+	uint64_t *old_pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pml4[0x1ff]) + hhdm_off);
 	for (size_t i = 0; i < 512; i++) {
-		if (pdpt[i] & PAGE_PRESENT) {
-			pdpt[i] &= ~(PAGE_PCD | PAGE_USER);
-			pd = (uint64_t *)(TABLE_ENTRY_ADDR(pdpt[i]) + hhdm_off);
+		if (old_pdpt[i] & PAGE_PRESENT) {
+			uintptr_t addr = (uintptr_t)kpalloc_one();
+			pdpt[i] = addr | (old_pdpt[i] & (PAGE_PRESENT | PAGE_RW | PAGE_PS | PAGE_NX));
+			memset((void *)(addr + hhdm_off), 0, 0x1000);
+			pd = (uint64_t *)(addr + hhdm_off);
+			uint64_t *old_pd = (uint64_t *)(TABLE_ENTRY_ADDR(old_pdpt[i]) + hhdm_off);
 			for (size_t j = 0; j < 512; j++) {
-				if (pd[j] & PAGE_PRESENT) {
-					pd[j] &= ~(PAGE_PCD | PAGE_USER);
-					pt = (uint64_t *)(TABLE_ENTRY_ADDR(pd[j]) + hhdm_off);
+				if (old_pd[j] & PAGE_PRESENT) {
+					addr = (uintptr_t)kpalloc_one();
+					pd[j] = addr | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PS | PAGE_NX));
+					pt = (uint64_t *)(addr + hhdm_off);
+					uint64_t *old_pt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pd[j]) + hhdm_off);
 					for (size_t k = 0; k < 512; k++) {
-						pt[k] &= ~(PAGE_PCD | PAGE_USER);
+						pt[k] = old_pt[k] & ~(PAGE_PCD | PAGE_USER);
 					}
 				}
 			}
 		}
 	}
 	// Add memory management stuff
-	pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pml4[0x1ff]) + hhdm_off);
 	ptr = ((uintptr_t)bitmap - hhdm_off);
 	vptr = 0xfffff80000000000;
 	intptr_t size = reserve * 0x1000;
@@ -234,13 +239,13 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	page_stack = (uint64_t *)((uintptr_t)page_stack_base + stack_off);
 	asm("add rsp, %0\n"
 		"add rbp, %0\n"
-		"mov cr3, %1\n"
+		"mov cr3, %1"
 		: : "g"(0xffff800000800000 - stack_base), "r"((uintptr_t)pml4 - hhdm_off), "n"(KERNEL_CS));
 
 	printf("MMAN: Page tables initialized successfully.\n");
 	printf("MMAN: PML4 is at %p\n", (uintptr_t)pml4 - hhdm_off);
 
-	// Reclaim bootloader reclaimable memory while keeping our borrowed page tables intact
+	// Reclaim bootloader reclaimable memory
 	entries = (struct limine_memmap_entry **)BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, LINADDR_OFF((uintptr_t)entries));
 	for (size_t i = 0; i < count; i++) {
 		uintptr_t old_entry = (uintptr_t)entries[i];
@@ -256,7 +261,14 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 					*++page_stack = j;
 			}
 		}
-		unmap_page(entry);
+	}
+	uintptr_t last_entry = 0;
+	for (size_t i = 0; i < count; i++) {
+		uintptr_t old_entry = (uintptr_t)entries[i];
+		struct limine_memmap_entry *entry = (struct limine_memmap_entry *)BUILD_LINADDR(0x180, 0x000, 0x000, 0x000, old_entry - hhdm_off);
+		if ((old_entry & -0x1000) != last_entry)
+			unmap_page(entry);
+		last_entry = old_entry & -0x1000;
 	}
 
 	printf("MMAN: Memory management initialized successfully.\n");
