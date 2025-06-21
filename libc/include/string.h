@@ -4,10 +4,10 @@
 
 #include <stddef.h>
 
-int memcmp(const void *, const void *, size_t);
-void *memcpy(void *__restrict, const void *__restrict, size_t);
-void *memmove(void *, const void *, size_t);
-void *memset(void *, int, size_t);
-size_t strlen(const char *);
+int memcmp(const void *lhs, const void *rhs, size_t count);
+void *memcpy(void *restrict dest, const void *restrict src, size_t count);
+void *memmove(void *dest, const void *src, size_t count);
+void *memset(void *dest, int ch, size_t count);
+size_t strlen(const char *str);
 
 #endif

@@ -47,5 +47,13 @@
 
 #define invlpg(addr) \
 	asm volatile("invlpg [%0]" : : "r"((void *)(addr)) : "memory")
+#define invltlb()                 \
+	asm volatile("mov rax, cr3\n" \
+				 "mov cr3, rax"   \
+				 : : : "rax", "memory")
+#define invltlb_all()             \
+	asm volatile("mov rax, cr0\n" \
+				 "mov cr0, rax"   \
+				 : : : "rax", "memory")
 
 #endif

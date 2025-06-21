@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #ifdef __is_libk
 #include <kernel/tty.h>
@@ -271,7 +272,20 @@ int vprintf(const char *format, va_list args) {
 			count++;
 		} else if (type == 's') {
 			const char *str = va_arg(args, const char *);
-			count += puts(str);
+			if (precision < 0) {
+#ifdef __is_libk
+				size_t str_len = min(strlen(str), precision);
+				tty_write(str, str_len);
+				count += str_len;
+#else
+				while (precision-- > 0 && *str) {
+					putchar(*str++);
+					count++;
+				}
+#endif
+			} else {
+				count += puts(str);
+			}
 		} else if (type == 'n') {
 			int *ptr = va_arg(args, int *);
 			*ptr = count;
@@ -352,7 +366,7 @@ int vprintf(const char *format, va_list args) {
 	return count;
 }
 
-int printf(const char *format, ...) {
+int printf(const char *restrict format, ...) {
 	va_list args;
 	va_start(args, format);
 

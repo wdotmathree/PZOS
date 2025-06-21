@@ -118,17 +118,17 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 
 	// Now that we can allocate pages, make the page tables
 	// We have to allocate and map manually for now until we switch to our new page tables
-	uint64_t *pml4 = (uint64_t *)(hhdm_off + kpalloc_one());
+	uint64_t *pml4 = (uint64_t *)(hhdm_off + alloc_page());
 	memset(pml4, 0, 0x1000);
 
 	// Map kernel stack
-	uint64_t *pdpt = (uint64_t *)(hhdm_off + kpalloc_one());
+	uint64_t *pdpt = (uint64_t *)(hhdm_off + alloc_page());
 	pml4[0x100] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pdpt, 0, 0x1000);
-	uint64_t *pd = (uint64_t *)(hhdm_off + kpalloc_one());
+	uint64_t *pd = (uint64_t *)(hhdm_off + alloc_page());
 	pdpt[0] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pd, 0, 0x1000);
-	uint64_t *pt = (uint64_t *)(hhdm_off + kpalloc_one());
+	uint64_t *pt = (uint64_t *)(hhdm_off + alloc_page());
 	pd[0x003] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pt, 0, 0x1000);
 	uintptr_t stack_base = 0;
@@ -149,7 +149,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	}
 	while (framebuf_size > 0) {
 		if (pd[LINADDR_PDE(vptr)] == 0) {
-			pt = (uint64_t *)(hhdm_off + kpalloc_one());
+			pt = (uint64_t *)(hhdm_off + alloc_page());
 			pd[LINADDR_PDE(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pt, 0, 0x1000);
 		}
@@ -166,7 +166,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	uintptr_t end = (uintptr_t)(mmap->entries + mmap->entry_count) - 1 - hhdm_off;
 	pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(pml4[0x100]) + hhdm_off);
 	pd = (uint64_t *)(TABLE_ENTRY_ADDR(pdpt[0x000]) + hhdm_off);
-	pt = (uint64_t *)(hhdm_off + kpalloc_one());
+	pt = (uint64_t *)(hhdm_off + alloc_page());
 	pd[0x100] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pt, 0, 0x1000);
 	mmap->entries = (struct limine_memmap_entry **)vptr;
@@ -186,20 +186,20 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	old_pml4 = (uint64_t *)((uintptr_t)old_pml4 + hhdm_off);
 
 	// Map kernel executable
-	pdpt = (uint64_t *)(hhdm_off + kpalloc_one());
+	pdpt = (uint64_t *)(hhdm_off + alloc_page());
 	memset(pdpt, 0, 0x1000);
 	pml4[0x1ff] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW;
 	// Go through old page tables and copy
 	uint64_t *old_pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pml4[0x1ff]) + hhdm_off);
 	for (size_t i = 0; i < 512; i++) {
 		if (old_pdpt[i] & PAGE_PRESENT) {
-			pd = (uint64_t *)(hhdm_off + kpalloc_one());
+			pd = (uint64_t *)(hhdm_off + alloc_page());
 			memset(pd, 0, 0x1000);
 			pdpt[i] = ((uintptr_t)pd - hhdm_off) | (old_pdpt[i] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
 			uint64_t *old_pd = (uint64_t *)(TABLE_ENTRY_ADDR(old_pdpt[i]) + hhdm_off);
 			for (size_t j = 0; j < 512; j++) {
 				if (old_pd[j] & PAGE_PRESENT) {
-					pt = (uint64_t *)(hhdm_off + kpalloc_one());
+					pt = (uint64_t *)(hhdm_off + alloc_page());
 					memset(pt, 0, 0x1000);
 					pd[j] = ((uintptr_t)pt - hhdm_off) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
 					uint64_t *old_pt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pd[j]) + hhdm_off);
@@ -216,12 +216,12 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	intptr_t size = reserve * 0x1000;
 	while (size > 0) {
 		if (pdpt[LINADDR_PDPTE(vptr)] == 0) {
-			pd = (uint64_t *)(hhdm_off + kpalloc_one());
+			pd = (uint64_t *)(hhdm_off + alloc_page());
 			pdpt[LINADDR_PDPTE(vptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pd, 0, 0x1000);
 		}
 		if (pd[LINADDR_PDE(vptr)] == 0) {
-			pt = (uint64_t *)(hhdm_off + kpalloc_one());
+			pt = (uint64_t *)(hhdm_off + alloc_page());
 			pd[LINADDR_PDE(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pt, 0, 0x1000);
 		}
@@ -274,7 +274,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	printf("MMAN: Memory management initialized successfully.\n");
 }
 
-void *kpalloc_one(void) {
+void *alloc_page(void) {
 	if (page_stack < page_stack_base) {
 		// If stack is empty, try to allocate from low memory
 		for (size_t i = 0; i < bitmap_size; i++) {
@@ -284,13 +284,13 @@ void *kpalloc_one(void) {
 				return (void *)((i * 64 + bit) * 0x1000);
 			}
 		}
-		panic("kpalloc_one: No free pages available");
+		panic("alloc_page: No free pages available");
 	}
 	// Allocate from the stack
 	return (void *)(*page_stack-- * 0x1000);
 }
 
-void kpfree_one(void *ptr) {
+void free_page(void *ptr) {
 	size_t page_num = (uintptr_t)ptr / 0x1000;
 	if ((uintptr_t)ptr < 0x1000000) {
 		// Free from bitmap
@@ -300,7 +300,7 @@ void kpfree_one(void *ptr) {
 	}
 }
 
-void *kpalloc_contig(size_t npages) {
+void *alloc_contig(size_t npages) {
 	if (npages == 0)
 		return NULL;
 
@@ -321,10 +321,10 @@ void *kpalloc_contig(size_t npages) {
 		}
 		asm("rol %0, 1" : "+r"(mask));
 	}
-	panic("kpalloc_contig: Not enough contiguous pages available");
+	panic("alloc_contig: Not enough contiguous pages available");
 }
 
-void kpfree_contig(void *ptr, size_t npages) {
+void free_contig(void *ptr, size_t npages) {
 	if (npages == 0 || ptr == NULL)
 		return;
 

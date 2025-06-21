@@ -13,7 +13,7 @@ int memcmp(const void *s1, const void *s2, size_t len) {
 	return 0;
 }
 
-void *memcpy(void *__restrict dst, const void *__restrict src, size_t n) {
+void *memcpy(void *restrict dst, const void *restrict src, size_t n) {
 	char *d = dst;
 	const char *s = src;
 	while (n >= 16) {

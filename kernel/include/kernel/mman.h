@@ -7,10 +7,10 @@
 
 void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_t hhdm_off, uintptr_t kernel_end);
 
-void *kpalloc_one(void);
-void kpfree_one(void *ptr);
+void *alloc_page(void);
+void free_page(void *ptr);
 
-void *kpalloc_contig(size_t npages);
-void kpfree_contig(void *ptr, size_t npages);
+void *alloc_contig(size_t npages);
+void free_contig(void *ptr, size_t npages);
 
 #endif
