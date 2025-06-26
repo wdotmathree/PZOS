@@ -5,7 +5,7 @@ CSRCS := $(shell find src arch/$(ARCH) -name "*.c")
 OBJS := $(CSRCS:.c=_c.o) $(ASMSRCS:.asm=_asm.o)
 
 ASFLAGS := -f elf64
-CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I./include -I./arch/$(ARCH) -I../libc/include -I../limine -mno-red-zone -masm=intel -ffreestanding -mcmodel=kernel -mno-avx
+CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I./include -I./arch -I./arch/$(ARCH) -I../libc/include -I../limine -mno-red-zone -masm=intel -ffreestanding -mcmodel=kernel -mno-avx
 
 include arch/$(ARCH)/make.config
 

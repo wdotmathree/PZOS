@@ -10,6 +10,7 @@
 #include <kernel/panic.h>
 #include <kernel/serial.h>
 #include <kernel/tty.h>
+#include <kernel/vmem.h>
 
 __attribute__((used, section(".limine_requests_start"))) //
 static volatile LIMINE_REQUESTS_START_MARKER;
@@ -41,6 +42,12 @@ __attribute__((used, section(".limine_requests_end"))) //
 static volatile LIMINE_REQUESTS_END_MARKER;
 
 __attribute__((noreturn)) void kmain(void);
+
+void test(int a) {
+	if (a == 0)
+		return;
+	return test(a - 1);
+}
 
 __attribute__((naked, noreturn)) void kinit(void) {
 	// Pop the (bogus) return address to get the stack base
@@ -94,6 +101,10 @@ __attribute__((naked, noreturn)) void kinit(void) {
 		panic("Memory map request failed");
 	extern uint8_t *tty_buf;
 	mman_init(memory_map_request.response, &tty_buf, hhdm_request.response->offset, (uintptr_t)&_kernel_end);
+	vmem_init();
+
+	// Simulate a stack page fault
+	test(256);
 
 	kmain();
 }

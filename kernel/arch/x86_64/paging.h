@@ -6,6 +6,8 @@
 #error "This file should only be included on x86_64 architecture."
 #endif
 
+#define PAGE_SIZE 0x1000
+
 // PAT memory types
 #define PAT_WB 0
 #define PAT_WT 1

@@ -1,10 +1,6 @@
-#pragma once
-#ifndef KERNEL_VMEM_H
-#define KERNEL_VMEM_H
-
 /**
  * Virtual Map: (Below are PAGE NUMBERS, not addresses)
- * PML4[0x100-0x17f] 0x800000000-0xbffffffff: Reserved
+ * PML4[0x100-0x17f] 0x800000000-0xbffffffff: Reserved/Temporary mappings
  * PML4[0x180] 0xc00000000: Kernel heap - Can expand up to 8TiB (16 PML4 entries)
  * PML4[0x1a0] 0xd00000000: Kernel virtual area - Can expand up to 8TiB (16 PML4 entries)
  * PML4[0x1c0] 0xe00000000: I/O mappings - Can expand up to 8TiB (16 PML4 entries)
@@ -19,5 +15,35 @@
  * - Mappings are initially set up in mman_init(), where we replace Limine's default HHDM
  * - Spaces between specified sections are guard spaces, which are NEVER mapped
  */
+
+#pragma once
+#ifndef KERNEL_VMEM_H
+#define KERNEL_VMEM_H
+
+#define VMEM_HEAP_BASE 0xffffc00000000000
+#define VMEM_VIRT_BASE 0xffffd00000000000
+#define VMEM_MMIO_BASE 0xffffd00000000000
+#define VMEM_STACK_BASE 0xffffffff80000000
+
+#define KERNEL_STACK_SIZE (64 * 1024) // 64 KiB stack size
+
+#include <stddef.h>
+#include <stdint.h>
+
+#define VMA_READ 0x1
+#define VMA_WRITE 0x2
+#define VMA_EXEC 0x4
+
+struct vma {
+	void *base;
+	size_t size;
+	uint64_t flags;
+
+	struct vma *next;
+	struct vma *prev;
+};
+
+void vmem_init(void);
+void create_vma(void *base, size_t size, uint64_t flags);
 
 #endif

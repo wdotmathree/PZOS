@@ -5,6 +5,7 @@
             "includePath": [
                 "${workspaceFolder}/libc/include",
                 "${workspaceFolder}/kernel/include",
+                "${workspaceFolder}/kernel/arch",
                 "${workspaceFolder}/kernel/arch/x86_64",
                 "${workspaceFolder}/limine",
                 "/opt/cross/lib/gcc/x86_64-elf/*/include/**"
