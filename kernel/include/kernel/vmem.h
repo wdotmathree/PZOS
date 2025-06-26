@@ -2,12 +2,22 @@
 #ifndef KERNEL_VMEM_H
 #define KERNEL_VMEM_H
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-
-void map_page(const void *virt, const void *phys, uint64_t flags);
-void unmap_page(const void *virt);
-bool is_mapped(const void *virt_addr);
+/**
+ * Virtual Map: (Below are PAGE NUMBERS, not addresses)
+ * PML4[0x100-0x17f] 0x800000000-0xbffffffff: Reserved
+ * PML4[0x180] 0xc00000000: Kernel heap - Can expand up to 8TiB (16 PML4 entries)
+ * PML4[0x1a0] 0xd00000000: Kernel virtual area - Can expand up to 8TiB (16 PML4 entries)
+ * PML4[0x1c0] 0xe00000000: I/O mappings - Can expand up to 8TiB (16 PML4 entries)
+ * PML4[0x1f0] 0xf80000000: Framebuffer (Mapped using large pages if possible)
+ * PML4[0x1fe] 0xff0000000: Recursive mapping (Second last PML4 entry)
+ * PML4[0x1ff] 0xff8000000: Kernel execution space
+ * 		L--> (0xff8000000-0xfffefffff): Memory management information (bitmaps, stacks, etc.)
+ * 		L--> (0xffff00000-0xffff7ffff): Kernel stacks (Only top page is mapped by mman_init())
+ * 		L--> (0xffff80000-0xfffffxxxx): Kernel executable (Segments as loaded by Limine)
+ *
+ * Notes:
+ * - Mappings are initially set up in mman_init(), where we replace Limine's default HHDM
+ * - Spaces between specified sections are guard spaces, which are NEVER mapped
+ */
 
 #endif

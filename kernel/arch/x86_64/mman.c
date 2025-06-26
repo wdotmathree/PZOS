@@ -26,14 +26,6 @@ static uint64_t *bitmap;
 static uint64_t *page_stack;
 static uint64_t *page_stack_base;
 
-// Initializes our physical memory allocator and replaces Limine's page tables
-// Virtual Map: (Below are PAGE NUMBERS, not addresses)
-// `0x800000000-0x8000007ff`/`100.000.000.000-100.000.003.1ff`: Kernel stack (Only map first page, rest is on-demand)
-// `0x800000800-0x80000xxxx`/`100.000.004.###-100.000.0xx.xxx`: Framebuffer (Mapped using large pages if possible)
-// `0x800000000-0x800000000`/`100.000.100.000-100.000.100.00x`: Temporary mapping for memory map pointers
-// `0xff0000000-0xff7ffffff`/`1fe.000.000.000-1fe.1ff.1ff.1ff`: Recursive page table (Second last PML4 entry)
-// `0xff8000000-0xfffffxxxx`/`1ff.000.000.000-1ff.1ff.1xx.xxx`: Memory management stuff (bitmap and page stack)
-// `0xfffff8000-0xfffffxxxx`/`1ff.1ff.1c0.000-1ff.1ff.1xx.xxx`: Kernel text and data
 // Our definition of "high memory" is everything above **16MiB** (not usable for ISA DMA) instead of the usual 1MiB
 void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_t hhdm_off, uintptr_t kernel_end) {
 	// Usable and bootloader reclaimable chunks are guaranteed to not overlap and are page aligned
@@ -121,15 +113,15 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	uint64_t *pml4 = (uint64_t *)(hhdm_off + alloc_page());
 	memset(pml4, 0, 0x1000);
 
-	// Map kernel stack
+	// Map kernel stack (page 0xffff7ffff)
 	uint64_t *pdpt = (uint64_t *)(hhdm_off + alloc_page());
-	pml4[0x100] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	pml4[0x1ff] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW;
 	memset(pdpt, 0, 0x1000);
 	uint64_t *pd = (uint64_t *)(hhdm_off + alloc_page());
-	pdpt[0] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	pdpt[0x1fd] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pd, 0, 0x1000);
 	uint64_t *pt = (uint64_t *)(hhdm_off + alloc_page());
-	pd[0x003] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	pd[0x1ff] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pt, 0, 0x1000);
 	uintptr_t stack_base = 0;
 	asm("mov %0, [rbp]" : "=r"(stack_base));
@@ -137,7 +129,11 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 
 	// Map framebuffer
 	uintptr_t ptr = framebuf_base;
-	uintptr_t vptr = 0xffff800000800000;
+	uintptr_t vptr = 0xfffff80000000000;
+	pdpt = (uint64_t *)(hhdm_off + alloc_page());
+	pml4[0x1f0] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	pd = (uint64_t *)(hhdm_off + alloc_page());
+	pdpt[0x000] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	if ((ptr & 0x1fffff) == 0) {
 		// Framebuffer is large page aligned
 		while (framebuf_size >= 0x200000) {
@@ -159,13 +155,15 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		framebuf_size -= 0x1000;
 	}
 
-	// Map the pages containing memory map pointers
+	// Map the pages containing memory map pointers (temporary)
 	struct limine_memmap_entry **entries = mmap->entries;
 	ptr = (uintptr_t)mmap->entries - hhdm_off;
 	vptr = BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, 0);
 	uintptr_t end = (uintptr_t)(mmap->entries + mmap->entry_count) - 1 - hhdm_off;
-	pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(pml4[0x100]) + hhdm_off);
-	pd = (uint64_t *)(TABLE_ENTRY_ADDR(pdpt[0x000]) + hhdm_off);
+	pdpt = (uint64_t *)(hhdm_off + alloc_page());
+	pml4[0x100] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	pd = (uint64_t *)(hhdm_off + alloc_page());
+	pdpt[0x000] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	pt = (uint64_t *)(hhdm_off + alloc_page());
 	pd[0x100] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pt, 0, 0x1000);
@@ -186,33 +184,26 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	old_pml4 = (uint64_t *)((uintptr_t)old_pml4 + hhdm_off);
 
 	// Map kernel executable
-	pdpt = (uint64_t *)(hhdm_off + alloc_page());
-	memset(pdpt, 0, 0x1000);
-	pml4[0x1ff] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW;
 	// Go through old page tables and copy
+	pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(pml4[0x1ff]) + hhdm_off);
+	pd = (uint64_t *)(hhdm_off + alloc_page());
+	pdpt[0x1fe] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW;
 	uint64_t *old_pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pml4[0x1ff]) + hhdm_off);
-	for (size_t i = 0; i < 512; i++) {
-		if (old_pdpt[i] & PAGE_PRESENT) {
-			pd = (uint64_t *)(hhdm_off + alloc_page());
-			memset(pd, 0, 0x1000);
-			pdpt[i] = ((uintptr_t)pd - hhdm_off) | (old_pdpt[i] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
-			uint64_t *old_pd = (uint64_t *)(TABLE_ENTRY_ADDR(old_pdpt[i]) + hhdm_off);
-			for (size_t j = 0; j < 512; j++) {
-				if (old_pd[j] & PAGE_PRESENT) {
-					pt = (uint64_t *)(hhdm_off + alloc_page());
-					memset(pt, 0, 0x1000);
-					pd[j] = ((uintptr_t)pt - hhdm_off) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
-					uint64_t *old_pt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pd[j]) + hhdm_off);
-					for (size_t k = 0; k < 512; k++) {
-						pt[k] = old_pt[k] & ~(PAGE_USER | PAGE_ACCESSED | PAGE_DIRTY);
-					}
-				}
+	uint64_t *old_pd = (uint64_t *)(TABLE_ENTRY_ADDR(old_pdpt[0x1fe]) + hhdm_off);
+	for (size_t j = 0; j < 512; j++) {
+		if (old_pd[j] & PAGE_PRESENT) {
+			pt = (uint64_t *)(hhdm_off + alloc_page());
+			memset(pt, 0, 0x1000);
+			pd[j] = ((uintptr_t)pt - hhdm_off) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
+			uint64_t *old_pt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pd[j]) + hhdm_off);
+			for (size_t k = 0; k < 512; k++) {
+				pt[k] = old_pt[k] & ~(PAGE_USER | PAGE_ACCESSED | PAGE_DIRTY);
 			}
 		}
 	}
 	// Add memory management stuff
 	ptr = ((uintptr_t)bitmap - hhdm_off);
-	vptr = 0xfffff80000000000;
+	vptr = 0xffffff8000000000;
 	intptr_t size = reserve * 0x1000;
 	while (size > 0) {
 		if (pdpt[LINADDR_PDPTE(vptr)] == 0) {
@@ -232,15 +223,15 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	}
 
 	// Prepare for page table switch
-	*framebuf = (uint8_t *)0xffff800000800000;
-	bitmap = (uint64_t *)(0xffffff8000000000);
+	*framebuf = (uint8_t *)0xfffff80000000000;
+	bitmap = (uint64_t *)0xffffff8000000000;
 	size_t stack_off = (uintptr_t)page_stack - (uintptr_t)page_stack_base;
 	page_stack_base = (uint64_t *)((uintptr_t)bitmap + bitmap_size);
 	page_stack = (uint64_t *)((uintptr_t)page_stack_base + stack_off);
 	asm("add rsp, %0\n"
 		"add rbp, %0\n"
 		"mov cr3, %1"
-		: : "g"(0xffff800000800000 - stack_base), "r"((uintptr_t)pml4 - hhdm_off), "n"(KERNEL_CS));
+		: : "g"(0xffffffff80000000 - stack_base), "r"((uintptr_t)pml4 - hhdm_off), "n"(KERNEL_CS));
 
 	printf("MMAN: Page tables initialized successfully.\n");
 	printf("MMAN: PML4 is at %p\n", (uintptr_t)pml4 - hhdm_off);
@@ -255,6 +246,9 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 			size_t start_page = entry->base / 0x1000;
 			size_t end_page = (entry->base + entry->length - 1) / 0x1000;
 			for (size_t j = start_page; j <= end_page; j++) {
+				// Make sure we don't reclaim the page for the top of stack
+				if (j == stack_base / 0x1000)
+					continue;
 				if (j < 0x1000000 / 0x1000)
 					bitmap[j / 64] |= (1ULL << (j % 64));
 				else
@@ -270,6 +264,16 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 			unmap_page(entry);
 		last_entry = old_entry & -0x1000;
 	}
+
+	// Unmap the temporary memory map pointers
+	for (size_t i = 0; i < (count + 1) * sizeof(struct limine_memmap_entry *); i += 0x1000) {
+		vptr = BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, i);
+		unmap_page((void *)vptr);
+	}
+	free_page((void *)TABLE_ENTRY_ADDR(*LINADDR_PDE_PTR((uintptr_t)entries)));
+	free_page((void *)TABLE_ENTRY_ADDR(*LINADDR_PDPTE_PTR((uintptr_t)entries)));
+	free_page((void *)TABLE_ENTRY_ADDR(*LINADDR_PML4E_PTR((uintptr_t)entries)));
+	invltlb();
 
 	printf("MMAN: Memory management initialized successfully.\n");
 }

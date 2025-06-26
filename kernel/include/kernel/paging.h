@@ -4,4 +4,12 @@
 
 #include_next <paging.h>
 
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+void map_page(const void *virt, const void *phys, uint64_t flags);
+void unmap_page(const void *virt);
+bool is_mapped(const void *virt_addr);
+
 #endif
