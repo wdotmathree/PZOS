@@ -73,16 +73,9 @@ void register_isr(uint8_t num, void *handler, uint8_t dpl) {
 
 struct isr_frame_t *default_isr(struct isr_frame_t *const frame) {
 	switch (frame->irq_num) {
-	case 0x81: // Custom panic IRQ
-		if (frame->isr_cs != KERNEL_CS) {
-			// Misbehaving userland code
-			// kill();
-			break;
-		}
-		_panic(*(const char **)frame->isr_rsp, frame);
 	default:
 		printf("\nIRQ %u triggered with error code %u\n", frame->irq_num, frame->error_code);
-		_panic("Unhandled IRQ", frame);
+		_panic(frame, "Unhandled IRQ");
 	}
 
 	return frame;

@@ -1,6 +1,6 @@
 /**
  * Virtual Map: (Below are PAGE NUMBERS, not addresses)
- * PML4[0x100-0x17f] 0x800000000-0xbffffffff: Reserved/Temporary mappings
+ * PML4[0x100-0x17f] 0x800000000-0xbffffffff: Reserved
  * PML4[0x180] 0xc00000000: Kernel heap - Can expand up to 8TiB (16 PML4 entries)
  * PML4[0x1a0] 0xd00000000: Kernel virtual area - Can expand up to 8TiB (16 PML4 entries)
  * PML4[0x1c0] 0xe00000000: I/O mappings - Can expand up to 8TiB (16 PML4 entries)
@@ -20,19 +20,29 @@
 #ifndef KERNEL_VMEM_H
 #define KERNEL_VMEM_H
 
-#define VMEM_HEAP_BASE 0xffffc00000000000
-#define VMEM_VIRT_BASE 0xffffd00000000000
-#define VMEM_MMIO_BASE 0xffffd00000000000
-#define VMEM_STACK_BASE 0xffffffff80000000
-
-#define KERNEL_STACK_SIZE (64 * 1024) // 64 KiB stack size
-
 #include <stddef.h>
 #include <stdint.h>
+
+#define VMEM_HEAP_BASE 0xffffc00000000000
+#define VMEM_VIRT_BASE 0xffffd00000000000
+#define VMEM_MMIO_BASE 0xffffe00000000000
+#define VMEM_STACK_BASE 0xffffffff80000000
+
+#define VMEM_HEAP_END 0xffffc80000000000
+#define VMEM_VIRT_END 0xffffd80000000000
+#define VMEM_MMIO_END 0xffffe80000000000
+
+#define KERNEL_STACK_SIZE (64 * 1024) // 64 KiB stack size
 
 #define VMA_READ 0x1
 #define VMA_WRITE 0x2
 #define VMA_EXEC 0x4
+
+#define PF_PRESENT 0x1
+#define PF_WRITE 0x2
+#define PF_USER 0x4
+#define PF_RESERVED 0x8
+#define PF_NX 0x10
 
 struct vma {
 	void *base;
@@ -45,5 +55,9 @@ struct vma {
 
 void vmem_init(void);
 void create_vma(void *base, size_t size, uint64_t flags);
+void destroy_vma(struct vma *vma);
+
+// Allocates `npages` pages of virtual memory, initially not backed by anything
+void *vmalloc(size_t npages, uint64_t flags);
 
 #endif

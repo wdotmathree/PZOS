@@ -1,56 +1,89 @@
 #include <kernel/vmem.h>
 
+#include <stdio.h>
 #include <string.h>
 
 #include <x86_64/isr.h>
 
 #include <kernel/mman.h>
 #include <kernel/paging.h>
+#include <kernel/panic.h>
 
 static struct vma *vma_list = NULL;
 static struct vma *vma_free_list = NULL;
 
-/// TODO: Fix this when we have a heap manager
-static uintptr_t heap_next = VMEM_HEAP_BASE;
+struct isr_frame_t *page_fault_handler(struct isr_frame_t const *frame) {
+	uintptr_t addr;
+	uint16_t error = frame->error_code;
+	asm volatile("mov %0, cr2" : "=r"(addr));
+
+	// Check if the fault was caused by a user-mode access
+	if (error & PF_USER) {
+		/// TODO: Handle user-mode page fault
+		panic("User-mode page fault at address %p", (void *)addr);
+	}
+
+	// Find a VMA that covers the faulting address
+	struct vma *vma = vma_list;
+	while (vma) {
+		if ((uintptr_t)vma->base <= addr && addr < (uintptr_t)vma->base + vma->size)
+			break;
+		vma = vma->next;
+	}
+	if (vma == NULL)
+		panic("Page fault at address %p, no VMA found", (void *)addr);
+
+	// Right now we only handle demand paging, so we will allocate a new page
+	/// TODO: Handle other cases (CoW, file mappings, etc.)
+	map_page((void *)addr, alloc_page(), vma->flags | PAGE_PRESENT);
+
+	return frame;
+}
 
 static struct vma *alloc_vma(void) {
 	if (vma_free_list) {
 		struct vma *vma = vma_free_list;
 		vma_free_list = vma->next;
-		vma->next = NULL;
 		return vma;
 	}
+
+	// Find a free virtual page
+	struct vma *free_addr = (struct vma *)vmalloc(PAGE_SIZE, VMA_READ | VMA_WRITE);
 	// Allocate a new VMA cache block
-	map_page((void *)heap_next, (void *)alloc_page(), PAGE_RW | PAGE_NX);
+	// map_page(free_addr, (void *)alloc_page(), PAGE_RW | PAGE_NX);
 	for (int i = 1; i < PAGE_SIZE / sizeof(struct vma); i++) {
-		struct vma *a = (struct vma *)heap_next + (i - 1);
-		struct vma *b = (struct vma *)heap_next + i;
+		struct vma *a = &free_addr[i - 1];
+		struct vma *b = &free_addr[i];
 		a->next = b;
 		b->prev = a;
 	}
-	vma_free_list = (struct vma *)heap_next;
-	heap_next += PAGE_SIZE;
-	return (struct vma *)(heap_next - PAGE_SIZE);
+
+	// Otherwise we return the first new VMA
+	vma_free_list = &free_addr[1];
+	return free_addr;
 }
 
-void free_vma(struct vma *vma) {
+static void free_vma(struct vma *vma) {
 	vma->next = vma_free_list;
 	vma_free_list = vma;
 }
 
-struct isr_frame_t page_fault_handler(struct isr_frame_t frame) {
-	uintptr_t addr;
-	asm volatile("mov %0, cr2" : "=r"(addr));
-
-	return frame;
-}
-
 void vmem_init(void) {
+	// Initialize the VMA list
+	map_page((void *)VMEM_VIRT_BASE, (void *)alloc_page(), PAGE_RW | PAGE_NX);
+	vma_free_list = (struct vma *)VMEM_VIRT_BASE;
+	for (size_t i = 1; i < PAGE_SIZE / sizeof(struct vma); i++) {
+		struct vma *a = &vma_free_list[i - 1];
+		struct vma *b = &vma_free_list[i];
+		a->next = b;
+		b->prev = a;
+	}
+
 	// Add initial mappings for kernel heap and stack
-	create_vma((void *)VMEM_HEAP_BASE, 0, VMA_READ | VMA_WRITE);
-	create_vma((void *)VMEM_VIRT_BASE, 0, VMA_READ | VMA_WRITE);
-	create_vma((void *)VMEM_MMIO_BASE, 0, VMA_READ | VMA_WRITE);
 	create_vma((void *)VMEM_STACK_BASE - KERNEL_STACK_SIZE, KERNEL_STACK_SIZE, VMA_READ | VMA_WRITE);
+	create_vma((void *)VMEM_MMIO_BASE, 0, VMA_READ | VMA_WRITE);
+	create_vma((void *)VMEM_VIRT_BASE, PAGE_SIZE, VMA_READ | VMA_WRITE); // One page for the preallocated VMA's
+	create_vma((void *)VMEM_HEAP_BASE, 0, VMA_READ | VMA_WRITE);
 
 	// Finish setting up the kernel stack
 	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
@@ -90,4 +123,55 @@ void create_vma(void *base, size_t size, uint64_t flags) {
 		if (curr)
 			curr->prev = vma;
 	}
+}
+
+void destroy_vma(struct vma *vma) {
+	if (vma->prev)
+		vma->prev->next = vma->next;
+	else
+		vma_list = vma->next;
+
+	if (vma->next)
+		vma->next->prev = vma->prev;
+
+	free_vma(vma);
+}
+
+void *vmalloc(size_t npages, uint64_t flags) {
+	struct vma *prev = vma_list;
+	struct vma *curr = vma_list->next; // Guaranteed to exist since we always have at least 4 mappings
+	while (curr) {
+		if ((uintptr_t)prev->base >= VMEM_VIRT_BASE) {
+			if (prev->base + prev->size + npages * PAGE_SIZE <= curr->base) {
+				// Found a gap
+				void *free_addr = (void *)(prev->base + prev->size);
+				if (prev->flags == flags) {
+					// Expand left VMA
+					prev->size += npages * PAGE_SIZE;
+					if (prev->base + prev->size == curr->base && curr->flags == flags) {
+						// Combine with right VMA
+						prev->size += curr->size;
+						prev->next = curr->next;
+						if (curr->next)
+							curr->next->prev = prev;
+						free_vma(curr);
+					}
+				} else if (free_addr + npages * PAGE_SIZE == curr->base && curr->flags == flags) {
+					// Expand right VMA
+					curr->base = free_addr;
+					curr->size += npages * PAGE_SIZE;
+				} else {
+					// Create a new VMA in the gap
+					create_vma(free_addr, npages * PAGE_SIZE, flags);
+				}
+				return free_addr;
+			}
+			if ((uintptr_t)prev->base >= VMEM_VIRT_END)
+				break;
+		}
+		prev = curr;
+		curr = curr->next;
+	}
+	// Ran out of space (somehow)
+	panic("Virtual address space exhausted, cannot allocate VMA");
 }

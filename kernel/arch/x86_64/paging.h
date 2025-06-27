@@ -42,10 +42,10 @@
 #define BUILD_PAGENUM(pml4, pdpt, pd, pt) \
 	(((uint64_t)(pml4) << 27) | ((uint64_t)(pdpt) << 18) | ((uint64_t)(pd) << 9) | (pt))
 
-#define LINADDR_PML4E_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, 0x1fe, LINADDR_PML4E(addr) * 8))
-#define LINADDR_PDPTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, LINADDR_PML4E(addr), LINADDR_PDPTE(addr) * 8))
-#define LINADDR_PDE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, LINADDR_PML4E(addr), LINADDR_PDPTE(addr), LINADDR_PDE(addr) * 8))
-#define LINADDR_PTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, LINADDR_PML4E(addr), LINADDR_PDPTE(addr), LINADDR_PDE(addr), LINADDR_PTE(addr) * 8))
+#define LINADDR_PML4E_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, 0x1fe, ((addr) >> 36) & 0xff8))
+#define LINADDR_PDPTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, 0, ((addr) >> 27) & 0x1ffff8))
+#define LINADDR_PDE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0, 0, ((addr) >> 18) & 0x3ffffff8))
+#define LINADDR_PTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0, 0, 0, ((addr) >> 9) & 0x7ffffffff8))
 
 #define invlpg(addr) \
 	asm volatile("invlpg [%0]" : : "r"((void *)(addr)) : "memory")

@@ -65,7 +65,7 @@ test: img
 
 debug: TARGET := debug
 debug: img
-	# gdb -ex "target remote :1234" -s "symbol-file kernel/kernel.elf"
+	# gdb -ex "target remote :1234" -se "kernel/kernel.elf"
 	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -s -S
 	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -s -S
 

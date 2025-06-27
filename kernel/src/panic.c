@@ -1,21 +1,25 @@
 #include <kernel/panic.h>
 
+#include <stdarg.h>
 #include <stdio.h>
 
 #include <kernel/tty.h>
 
-__attribute__((noreturn)) void _panic(const char *msg, struct isr_frame_t *frame) {
+extern int vprintf(const char *, va_list);
+
+__attribute__((noreturn)) void _panic(struct isr_frame_t *frame, const char *msg, ...) {
 	if (msg != NULL) {
+		va_list args;
+		va_start(args, msg);
 		tty_puts("\nKernel panic: ");
-		tty_puts(msg);
-		tty_putchar('\n');
+		vprintf(msg, args);
 	} else {
-		tty_puts("Kernel panic: Unknown error.\n");
+		tty_puts("Kernel panic: Unknown error.");
 	}
 
-	/// TODO: Printstack trace
+	/// TODO: Print stack trace
 	if (frame != NULL) {
-		tty_puts("Register state:\n");
+		tty_puts("\nRegister state:\n");
 		printf("RAX: %p RBX: %p RCX: %p RDX: %p\n", frame->rax, frame->rbx, frame->rcx, frame->rdx);
 		printf("RSI: %p RDI: %p RBP: %p R8:  %p\n", frame->rsi, frame->rdi, frame->rbp, frame->r8);
 		printf("R9:  %p R10: %p R11: %p R12: %p\n", frame->r9, frame->r10, frame->r11, frame->r12);
