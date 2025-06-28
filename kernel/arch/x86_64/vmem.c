@@ -35,7 +35,8 @@ struct isr_frame_t *page_fault_handler(struct isr_frame_t const *frame) {
 
 	// Right now we only handle demand paging, so we will allocate a new page
 	/// TODO: Handle other cases (CoW, file mappings, etc.)
-	map_page((void *)addr, alloc_page(), vma->flags | PAGE_PRESENT);
+	/// TODO: Handle flags properly
+	map_page((void *)addr, alloc_page(), PAGE_PRESENT | PAGE_RW | PAGE_NX);
 
 	return frame;
 }
@@ -83,7 +84,7 @@ void vmem_init(void) {
 	create_vma((void *)VMEM_STACK_BASE - KERNEL_STACK_SIZE, KERNEL_STACK_SIZE, VMA_READ | VMA_WRITE);
 	create_vma((void *)VMEM_MMIO_BASE, 0, VMA_READ | VMA_WRITE);
 	create_vma((void *)VMEM_VIRT_BASE, PAGE_SIZE, VMA_READ | VMA_WRITE); // One page for the preallocated VMA's
-	create_vma((void *)VMEM_HEAP_BASE, 0, VMA_READ | VMA_WRITE);
+	create_vma((void *)VMEM_HEAP_BASE, PAGE_SIZE, VMA_READ | VMA_WRITE); // We need at least one page for heap, so might as well allocate it now
 
 	// Finish setting up the kernel stack
 	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
@@ -137,11 +138,11 @@ void destroy_vma(struct vma *vma) {
 	free_vma(vma);
 }
 
-void *vmalloc(size_t npages, uint64_t flags) {
+void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 	struct vma *prev = vma_list;
 	struct vma *curr = vma_list->next; // Guaranteed to exist since we always have at least 4 mappings
 	while (curr) {
-		if ((uintptr_t)prev->base >= VMEM_VIRT_BASE) {
+		if ((uintptr_t)prev->base >= start) {
 			if (prev->base + prev->size + npages * PAGE_SIZE <= curr->base) {
 				// Found a gap
 				void *free_addr = (void *)(prev->base + prev->size);
@@ -166,7 +167,7 @@ void *vmalloc(size_t npages, uint64_t flags) {
 				}
 				return free_addr;
 			}
-			if ((uintptr_t)prev->base >= VMEM_VIRT_END)
+			if ((uintptr_t)prev->base >= end)
 				break;
 		}
 		prev = curr;
@@ -174,4 +175,8 @@ void *vmalloc(size_t npages, uint64_t flags) {
 	}
 	// Ran out of space (somehow)
 	panic("Virtual address space exhausted, cannot allocate VMA");
+}
+
+void *vmalloc(size_t npages, uint64_t flags) {
+	return vmalloc_at((void *)VMEM_VIRT_BASE, (void *)VMEM_VIRT_END, npages, flags);
 }

@@ -59,5 +59,6 @@ void destroy_vma(struct vma *vma);
 
 // Allocates `npages` pages of virtual memory, initially not backed by anything
 void *vmalloc(size_t npages, uint64_t flags);
+void *vmalloc_at(void *base, void *limit, size_t npages, uint64_t flags);
 
 #endif

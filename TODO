@@ -1,30 +1,23 @@
 ### Maintenance tasks
-  - Find bugs and clean up code (especially tty and printf)
-  - Review and adjust folder structure as needed during future development
+  - Verify memory allocation functions don't return NULL and handle errors gracefully
   - Safety concerns
   - Thread safety and re-entrancy (especially in memory management)
   - Profile/optimize code
 
 ### Development steps
-  1. Implement allocators
-     1. Should we use a slab allocator?
-     2. Implement an AVL tree for virtual memory
-     3. Write mapping stuff
-  2. Make sure our kernel is robust
-     1. Investigate libk functions to ensure they are safe
-  3. Figure out APIC and/or I/O APIC
+  1. Figure out APIC and/or I/O APIC
      1. For example for keyboard input
-  4. How do timers work?
+  2. How do timers work?
      1. PIT vs. HPET and how to use them
-  5. Write drivers for common hardware
+  3. Write drivers for common hardware
      1. When do we break the drivers into loadable modules?
      2. ATA hard drive (may need PCI support)
      3. Does booting off a USB drive work the same as a hard drive?
         1. If not then we also want a USB driver
         2. How can we identify what kind of drive we are booting from?
      4. PS/2 keyboard
-  6. Implement a basic file system
+  4. Implement a basic file system
 	 1. Probably FAT32 at first
 	 2. Maybe abstract it into a VFS
-  7. Implement a basic shell (first userland program)
+  5. Implement a basic shell (first userland program)
      1. Need syscalls for I/O and such
