@@ -3,8 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <kernel/log.h>
 #include <kernel/mman.h>
-#include <kernel/paging.h>
 #include <kernel/panic.h>
 
 void map_page(const void *virt_addr, const void *phys_addr, uint64_t flags) {
@@ -45,7 +45,7 @@ void map_page(const void *virt_addr, const void *phys_addr, uint64_t flags) {
 	if ((*pte & PAGE_PRESENT)) {
 		if (TABLE_ENTRY_ADDR(*pte) == phys)
 			return;
-		printf("map_page: Remapping virtual address %p to %p (previously mapped to %p)\n", virt, phys, TABLE_ENTRY_ADDR(*pte));
+		LOG(__FUNCTION__, "Remapping virtual address %p to %p (previously mapped to %p)", virt, phys, TABLE_ENTRY_ADDR(*pte));
 	} else {
 		*pde += 1ULL << 52;
 	}
@@ -56,7 +56,7 @@ void map_page(const void *virt_addr, const void *phys_addr, uint64_t flags) {
 void unmap_page(const void *virt_addr) {
 	uintptr_t virt = (uintptr_t)virt_addr & -0x1000LL;
 	if (!is_mapped(virt_addr)) {
-		printf("unmap_page: Attempted to unmap non-mapped page at %p\n", virt);
+		LOG(__FUNCTION__, "Attempted to unmap non-mapped page at %p", virt);
 		return;
 	}
 

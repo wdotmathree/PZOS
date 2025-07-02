@@ -51,6 +51,8 @@ struct isr_frame_t {
 #define KERNEL_DS (2 << 3)
 #define TSS (5 << 3) // For the future
 
+typedef struct isr_frame_t *(*isr_handler_t)(struct isr_frame_t *const);
+
 struct gdt_entry {
 	uint16_t limit_low;
 	uint16_t base_low;
@@ -61,6 +63,7 @@ struct gdt_entry {
 
 void isr_init(void);
 
-void register_isr(uint8_t num, void *handler, uint8_t dpl);
+void register_isr(uint8_t num, isr_handler_t handler, uint8_t dpl);
+void unregister_isr(uint8_t num);
 
 #endif

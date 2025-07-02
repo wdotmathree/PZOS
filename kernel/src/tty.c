@@ -44,6 +44,8 @@ static void tty_drawcursor(void) {
 	}
 }
 
+uint32_t ANSI_8BIT_COLORS[256];
+
 static void init_ansicolors(void) {
 	memcpy(ANSI_8BIT_COLORS, ANSI_4BIT_COLORS, sizeof(ANSI_4BIT_COLORS));
 	// 6x6x6 cube

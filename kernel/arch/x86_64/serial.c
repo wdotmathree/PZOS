@@ -2,7 +2,7 @@
 
 #include <stdbool.h>
 
-#include <kernel/intrin.h>
+#include <x86_64/intrin.h>
 
 #define COM1 (0x3f8)
 
@@ -23,6 +23,8 @@ int serial_init(void) {
 
 	outb(COM1 + 4, 0x03); // Disable loopback
 	ready = true;
+
+	/// TODO: Initialize terminal settings (clear, wrapping, etc.)
 
 	return 0;
 }

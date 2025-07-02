@@ -3,18 +3,21 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include <kernel/log.h>
 #include <kernel/tty.h>
 
 extern int vprintf(const char *, va_list);
 
 __attribute__((noreturn)) void _panic(struct isr_frame_t *frame, const char *msg, ...) {
+	tty_putchar('\n');
+
 	if (msg != NULL) {
 		va_list args;
 		va_start(args, msg);
-		tty_puts("\nKernel panic: ");
+		LOG(NULL, "Kernel panic: ");
 		vprintf(msg, args);
 	} else {
-		tty_puts("Kernel panic: Unknown error.");
+		LOG(NULL, "Kernel panic: Unknown error.");
 	}
 
 	/// TODO: Print stack trace
@@ -27,9 +30,9 @@ __attribute__((noreturn)) void _panic(struct isr_frame_t *frame, const char *msg
 		printf("RIP: %p CS:  %#.4x          RFLAGS: %#.8x\n", frame->isr_rip, (unsigned int)frame->isr_cs, (unsigned int)frame->isr_rflags);
 		printf("RSP: %p SS:  %#.4x\n", frame->isr_rsp, (unsigned int)frame->isr_ss);
 		uint64_t cr0, cr2, cr3, cr4;
-		asm("mov %0, cr0\n"
-			"mov %1, cr2\n"
-			"mov %2, cr3\n"
+		asm("mov %0, cr0\n\t"
+			"mov %1, cr2\n\t"
+			"mov %2, cr3\n\t"
 			"mov %3, cr4"
 			: "=r"(cr0), "=r"(cr2), "=r"(cr3), "=r"(cr4));
 		printf("CR0: %p CR2: %p CR3: %p CR4: %p\n", cr0, cr2, cr3, cr4);

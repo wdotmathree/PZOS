@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include <kernel/defines.h>
+#include <kernel/log.h>
 #include <kernel/paging.h>
 #include <kernel/panic.h>
 #include <kernel/tty.h>
@@ -37,10 +38,10 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 
 	// Print memory map entries for logging
 	size_t mem_size = 0;
-	printf("MMAN: Iterating through %zu memory map entries...\n", count);
+	LOG("MMAN", "Iterating through %zu memory map entries...", count);
 	for (size_t i = 0; i < count; i++) {
 		struct limine_memmap_entry *entry = mmap->entries[i];
-		printf("MMAN: base=%p size=%p type=%s\n", entry->base, entry->length, MEM_TYPES[entry->type]);
+		LOG("MMAN", "base=%p size=%p type=%s", entry->base, entry->length, MEM_TYPES[entry->type]);
 		if (entry->type == LIMINE_MEMMAP_USABLE || entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
 			max_addr = entry->base + entry->length - 1;
 			mem_size += entry->length;
@@ -52,8 +53,8 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 			}
 		}
 	}
-	printf("MMAN: Maximum usable byte at %p\n", max_addr);
-	printf("MMAN: Usable memory size: %zu bytes (%zu pages)\n", mem_size, mem_size / 0x1000);
+	LOG("MMAN", "Maximum usable byte at %p", max_addr);
+	LOG("MMAN", "Usable memory size: %zu bytes (%zu pages)", mem_size, mem_size / 0x1000);
 
 	// Find candidates for low memory bitmap and high memory page stack
 	size_t reserve = ((max_addr - 0x1000000) / 0x1000 * 8 + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
@@ -61,7 +62,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		struct limine_memmap_entry *entry = mmap->entries[i];
 		if (entry->type == LIMINE_MEMMAP_USABLE) {
 			if (entry->base + entry->length > max(entry->base, 0x1000000) + reserve * 0x1000) {
-				printf("MMAN: Reserving %zu pages for memory management structures at %p\n", reserve, entry->base);
+				LOG("MMAN", "Reserving %zu pages for memory management structures at %p", reserve, entry->base);
 				bitmap = (uint64_t *)(max(entry->base, 0x1000000) + hhdm_off);
 				break;
 			}
@@ -228,13 +229,13 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	size_t stack_off = (uintptr_t)page_stack - (uintptr_t)page_stack_base;
 	page_stack_base = (uint64_t *)((uintptr_t)bitmap + bitmap_size);
 	page_stack = (uint64_t *)((uintptr_t)page_stack_base + stack_off);
-	asm("add rsp, %0\n"
-		"add rbp, %0\n"
+	asm("add rsp, %0\n\t"
+		"add rbp, %0\n\t"
 		"mov cr3, %1"
 		: : "g"(0xffffffff80000000 - stack_base), "r"((uintptr_t)pml4 - hhdm_off), "n"(KERNEL_CS));
 
-	printf("MMAN: Page tables initialized successfully.\n");
-	printf("MMAN: PML4 is at %p\n", (uintptr_t)pml4 - hhdm_off);
+	LOG("MMAN", "Page tables initialized successfully.");
+	LOG("MMAN", "PML4 is at %p", (uintptr_t)pml4 - hhdm_off);
 
 	// Reclaim bootloader reclaimable memory
 	entries = (struct limine_memmap_entry **)BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, LINADDR_OFF((uintptr_t)entries));
@@ -275,7 +276,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	free_page((void *)TABLE_ENTRY_ADDR(*LINADDR_PML4E_PTR((uintptr_t)entries)));
 	invltlb();
 
-	printf("MMAN: Memory management initialized successfully.\n");
+	LOG("MMAN", "Memory management initialized successfully.");
 }
 
 void *alloc_page(void) {

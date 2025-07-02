@@ -5,9 +5,11 @@
 #include <stdio.h>
 
 #include <kernel/kmalloc.h>
+#include <kernel/log.h>
 #include <kernel/mman.h>
 #include <kernel/panic.h>
 #include <kernel/serial.h>
+#include <kernel/time.h>
 #include <kernel/tty.h>
 #include <kernel/vmem.h>
 
@@ -51,9 +53,17 @@ void test(int a) {
 __attribute__((naked, noreturn)) void kinit(void) {
 	// Pop the (bogus) return address to get the stack base
 	// Save it in rbp (will be used in mman_init)
-	asm volatile("add rsp, 8\n"
+	asm volatile("add rsp, 8\n\t"
 				 "mov rbp, rsp"
 				 : : : "memory");
+
+	// Initialize TSC base (TSC count when the kernel was loaded)
+	{
+		extern uint64_t tsc_base;
+		uint64_t lo, hi;
+		asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
+		tsc_base = ((uint64_t)hi << 32) | lo;
+	}
 
 	asm volatile("cli");
 	if (!LIMINE_BASE_REVISION_SUPPORTED)
@@ -74,12 +84,12 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	}
 
 	// Enable SSE
-	asm volatile("mov rax, cr0\n"
-				 "and rax, -5\n" // -5 = 0xfb
-				 "or rax, 0x2\n"
-				 "mov cr0, rax\n"
-				 "mov rax, cr4\n"
-				 "or rax, 0x00040600\n"
+	asm volatile("mov rax, cr0\n\t"
+				 "and rax, -5\n\t" // -5 = 0xfb
+				 "or rax, 0x2\n\t"
+				 "mov cr0, rax\n\t"
+				 "mov rax, cr4\n\t"
+				 "or rax, 0x00040600\n\t"
 				 "mov cr4, rax"
 				 : : : "rax");
 
@@ -87,13 +97,9 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	isr_init();
 
 	tty_init(framebuffer_request.response->framebuffers[0]);
-	tty_puts("PZOS kernel initializing...\n");
 
 	// Initialize serial port
-	if (serial_init())
-		tty_puts("No serial port found, continuing without it.\n");
-	else
-		tty_puts("Serial port initialized successfully.\n");
+	serial_init();
 
 	// Initialize memory management
 	if (memory_map_request.response == NULL)
@@ -102,6 +108,9 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	mman_init(memory_map_request.response, &tty_buf, hhdm_request.response->offset, (uintptr_t)&_kernel_end);
 	vmem_init();
 	kmalloc_init();
+
+	// Initialize time subsystem
+	time_init();
 
 	kmain();
 }

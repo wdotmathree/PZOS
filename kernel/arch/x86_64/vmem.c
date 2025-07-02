@@ -12,7 +12,7 @@
 static struct vma *vma_list = NULL;
 static struct vma *vma_free_list = NULL;
 
-struct isr_frame_t *page_fault_handler(struct isr_frame_t const *frame) {
+struct isr_frame_t *page_fault_handler(struct isr_frame_t *const frame) {
 	uintptr_t addr;
 	uint16_t error = frame->error_code;
 	asm volatile("mov %0, cr2" : "=r"(addr));

@@ -1,7 +1,9 @@
-#include <kernel/isr.h>
+#include <x86_64/isr.h>
 
 #include <stddef.h>
 #include <stdio.h>
+
+#include <x86_64/pic.h>
 
 #include <kernel/defines.h>
 #include <kernel/panic.h>
@@ -17,7 +19,8 @@ static struct gdt_entry gdt[5] = {
 };
 
 static struct idt_entry idt[IDT_SIZE];
-struct isr_frame_t *(*isr_vectors[IDT_SIZE])(struct isr_frame_t *const);
+
+isr_handler_t isr_vectors[IDT_SIZE];
 
 void isr_init(void) {
 	// First deal with GDT stuff
@@ -28,20 +31,21 @@ void isr_init(void) {
 		.limit = sizeof(gdt) - 1,
 		.base = (uintptr_t)gdt
 	};
-	asm volatile("push 1 << 3\n"
-				 "lea rax, [label]\n"
-				 "push rax\n"
-				 "lgdt %0\n"
-				 "retfq\n"
-				 "label:\n"
-				 "mov eax, 2 << 3\n"
-				 "mov ds, ax\n"
-				 "mov es, ax\n"
-				 "mov fs, ax\n"
-				 "mov gs, ax\n"
+	asm volatile("push 1 << 3\n\t"
+				 "lea rax, [label]\n\t"
+				 "push rax\n\t"
+				 "lgdt %0\n\t"
+				 "retfq\n\t"
+				 "label:\n\t"
+				 "mov eax, 2 << 3\n\t"
+				 "mov ds, ax\n\t"
+				 "mov es, ax\n\t"
+				 "mov fs, ax\n\t"
+				 "mov gs, ax\n\t"
 				 "mov ss, ax"
 				 : : "m"(gdtr) : "rax", "memory");
 
+	// Populate our IDT
 	extern void isr_stub_0;
 	for (int i = 0; i < IDT_SIZE; i++) {
 		uintptr_t stub_addr = (uintptr_t)&isr_stub_0 + i * 16;
@@ -64,18 +68,25 @@ void isr_init(void) {
 		.base = (uintptr_t)idt
 	};
 	asm volatile("lidt %0" : : "m"(idtr) : "memory");
+
+	// Initialize PICs
+	PIC_init();
 }
 
-void register_isr(uint8_t num, void *handler, uint8_t dpl) {
+void register_isr(uint8_t num, isr_handler_t handler, uint8_t dpl) {
 	idt[num].attributes = (dpl << 5) | 0x8e; // Set DPL and present bit
 	isr_vectors[num] = handler;
+}
+
+void unregister_isr(uint8_t num) {
+	idt[num].attributes = (0 << 5) | 0x8e; // Clear attributes to disable the ISR
+	isr_vectors[num] = default_isr; // Reset to default handler
 }
 
 struct isr_frame_t *default_isr(struct isr_frame_t *const frame) {
 	switch (frame->irq_num) {
 	default:
-		printf("\nIRQ %u triggered with error code %u\n", frame->irq_num, frame->error_code);
-		_panic(frame, "Unhandled IRQ");
+		_panic(frame, "Unhandled IRQ %u, error code %u", frame->irq_num, frame->error_code);
 	}
 
 	return frame;
