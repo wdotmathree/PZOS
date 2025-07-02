@@ -32,11 +32,11 @@ void isr_init(void) {
 		.base = (uintptr_t)gdt
 	};
 	asm volatile("push 1 << 3\n\t"
-				 "lea rax, [label]\n\t"
+				 "lea rax, [.Llabel]\n\t"
 				 "push rax\n\t"
 				 "lgdt %0\n\t"
 				 "retfq\n\t"
-				 "label:\n\t"
+				 ".Llabel:\n\t"
 				 "mov eax, 2 << 3\n\t"
 				 "mov ds, ax\n\t"
 				 "mov es, ax\n\t"
@@ -85,6 +85,10 @@ void unregister_isr(uint8_t num) {
 
 struct isr_frame_t *default_isr(struct isr_frame_t *const frame) {
 	switch (frame->irq_num) {
+	case 0x08: // Double fault
+		// Too unsafe to call panic, just print state and halt
+		printf("Double fault occurred! RIP: %p\n", frame->isr_rip);
+		hcf();
 	default:
 		_panic(frame, "Unhandled IRQ %u, error code %u", frame->irq_num, frame->error_code);
 	}

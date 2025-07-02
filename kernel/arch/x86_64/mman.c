@@ -133,8 +133,10 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	uintptr_t vptr = 0xfffff80000000000;
 	pdpt = (uint64_t *)(hhdm_off + alloc_page());
 	pml4[0x1f0] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	memset(pdpt, 0, 0x1000);
 	pd = (uint64_t *)(hhdm_off + alloc_page());
 	pdpt[0x000] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	memset(pd, 0, 0x1000);
 	if ((ptr & 0x1fffff) == 0) {
 		// Framebuffer is large page aligned
 		while (framebuf_size >= 0x200000) {
@@ -163,8 +165,10 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	uintptr_t end = (uintptr_t)(mmap->entries + mmap->entry_count) - 1 - hhdm_off;
 	pdpt = (uint64_t *)(hhdm_off + alloc_page());
 	pml4[0x100] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	memset(pdpt, 0, 0x1000);
 	pd = (uint64_t *)(hhdm_off + alloc_page());
 	pdpt[0x000] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	memset(pd, 0, 0x1000);
 	pt = (uint64_t *)(hhdm_off + alloc_page());
 	pd[0x100] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pt, 0, 0x1000);
@@ -189,13 +193,14 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(pml4[0x1ff]) + hhdm_off);
 	pd = (uint64_t *)(hhdm_off + alloc_page());
 	pdpt[0x1fe] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW;
+	memset(pd, 0, 0x1000);
 	uint64_t *old_pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pml4[0x1ff]) + hhdm_off);
 	uint64_t *old_pd = (uint64_t *)(TABLE_ENTRY_ADDR(old_pdpt[0x1fe]) + hhdm_off);
 	for (size_t j = 0; j < 512; j++) {
 		if (old_pd[j] & PAGE_PRESENT) {
 			pt = (uint64_t *)(hhdm_off + alloc_page());
-			memset(pt, 0, 0x1000);
 			pd[j] = ((uintptr_t)pt - hhdm_off) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
+			memset(pt, 0, 0x1000);
 			uint64_t *old_pt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pd[j]) + hhdm_off);
 			for (size_t k = 0; k < 512; k++) {
 				pt[k] = old_pt[k] & ~(PAGE_USER | PAGE_ACCESSED | PAGE_DIRTY);

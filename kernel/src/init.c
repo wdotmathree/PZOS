@@ -67,9 +67,9 @@ __attribute__((naked, noreturn)) void kinit(void) {
 
 	asm volatile("cli");
 	if (!LIMINE_BASE_REVISION_SUPPORTED)
-		halt();
+		hcf();
 	if (hhdm_request.response == NULL)
-		halt();
+		hcf();
 	if (framebuffer_request.response == NULL || framebuffer_request.response->framebuffer_count < 1) {
 		// Try printing error to VGA text mode if available
 		uint16_t *vga = (uint16_t *)(hhdm_request.response->offset + 0xb8000);
@@ -80,7 +80,7 @@ __attribute__((naked, noreturn)) void kinit(void) {
 			if (c != '\0')
 				c = s[i + 1];
 		}
-		halt();
+		hcf();
 	}
 
 	// Enable SSE
