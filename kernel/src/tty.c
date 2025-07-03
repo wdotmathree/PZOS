@@ -146,8 +146,15 @@ static void tty_scroll(void) {
 	used[tty_height - 1] = 0;
 }
 
-/// TODO: Add buffering to parse control sequences spanning multiple print calls
+static char escapebuf[64] = {0};
+static size_t escapebuf_len = 0;
+static bool escapebuf_active = false;
+
 static int parseescape(const char *s) {
+	if (s[0] == '\0') {
+		escapebuf_active = true;
+		return 0;
+	}
 	int i = 0;
 	if (s[i++] != '[') {
 		return 0; // Not an escape sequence
@@ -157,16 +164,33 @@ static int parseescape(const char *s) {
 	char cmd;
 	while (true) {
 		char c = s[i++];
-		if (c >= '0' && c <= '9') {
+		switch (c) {
+		case '\0': // Incomplete escape sequence
+			if (escapebuf_active)
+				return 0;
+			strncpy(escapebuf, s, sizeof(escapebuf));
+			escapebuf_len = strlen(escapebuf);
+			escapebuf_active = true;
+			return escapebuf_len;
+		case '0' ... '9':
 			args[arg_count] = args[arg_count] * 10 + (c - '0');
-		} else if (c == ';') {
-			args[++arg_count] = 0;
-		} else {
+			continue;
+		case ';':
+			if (arg_count < 15)
+				args[++arg_count] = 0;
+			else
+				return 0; // Give up on parsing
+			continue;
+		default:
 			cmd = c;
 			arg_count++;
 			break;
 		}
+		break;
 	}
+	escapebuf_active = false;
+	escapebuf_len = 0;
+
 	if (cmd == 'm') {
 		int n;
 		for (int j = 0; j < arg_count; j++) {
@@ -290,6 +314,22 @@ static int parsecontrol(const char *s) {
 
 void tty_putchar(char c) {
 	serial_write(c);
+
+	if (escapebuf_active) {
+		if (escapebuf_len < sizeof(escapebuf) - 1) {
+			escapebuf[escapebuf_len++] = c;
+			escapebuf[escapebuf_len] = '\0';
+			parseescape(escapebuf);
+		} else {
+			// Buffer overflow, flush and reset
+			escapebuf_active = false;
+			tty_write(escapebuf, escapebuf_len);
+			escapebuf_len = 0;
+			return;
+		}
+		return;
+	}
+
 	char str[2] = {c, 0};
 	if (parsecontrol(str)) {
 		tty_drawcursor();
@@ -309,6 +349,11 @@ void tty_putchar(char c) {
 
 void tty_write(const char *data, size_t size) {
 	for (size_t i = 0; i < size; i++) {
+		if (escapebuf_active) {
+			tty_putchar(data[i]);
+			continue;
+		}
+
 		int off = parsecontrol(data + i);
 		for (; off-- > 0; i++)
 			serial_write(data[i]);

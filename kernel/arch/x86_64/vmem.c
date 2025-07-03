@@ -52,7 +52,7 @@ static struct vma *alloc_vma(void) {
 	struct vma *free_addr = (struct vma *)vmalloc(PAGE_SIZE, VMA_READ | VMA_WRITE);
 	// Allocate a new VMA cache block
 	// map_page(free_addr, (void *)alloc_page(), PAGE_RW | PAGE_NX);
-	for (int i = 1; i < PAGE_SIZE / sizeof(struct vma); i++) {
+	for (size_t i = 1; i < PAGE_SIZE / sizeof(struct vma); i++) {
 		struct vma *a = &free_addr[i - 1];
 		struct vma *b = &free_addr[i];
 		a->next = b;
@@ -142,7 +142,7 @@ void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 	struct vma *prev = vma_list;
 	struct vma *curr = vma_list->next; // Guaranteed to exist since we always have at least 4 mappings
 	while (curr) {
-		if ((uintptr_t)prev->base >= start) {
+		if (prev->base >= start) {
 			if (prev->base + prev->size + npages * PAGE_SIZE <= curr->base) {
 				// Found a gap
 				void *free_addr = (void *)(prev->base + prev->size);
@@ -167,7 +167,7 @@ void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 				}
 				return free_addr;
 			}
-			if ((uintptr_t)prev->base >= end)
+			if (prev->base >= end)
 				break;
 		}
 		prev = curr;

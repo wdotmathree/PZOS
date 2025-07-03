@@ -24,7 +24,12 @@ int serial_init(void) {
 	outb(COM1 + 4, 0x03); // Disable loopback
 	ready = true;
 
-	/// TODO: Initialize terminal settings (clear, wrapping, etc.)
+	// Fix line wrapping
+	serial_write('\x1b');
+	serial_write('[');
+	serial_write('?');
+	serial_write('7');
+	serial_write('h');
 
 	return 0;
 }
