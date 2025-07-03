@@ -28,9 +28,6 @@ static int calibrate_state = 0;
 struct isr_frame_t *calibrate_tsc(struct isr_frame_t *const frame) {
 	if (calibrate_state == 0) {
 		calibrate_state = 1;
-		// Ignore the first interrupt (bogus)
-	} else if (calibrate_state == 1) {
-		calibrate_state = 2;
 		// Note down the current TSC value
 		uint32_t lo, hi;
 		asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
@@ -102,7 +99,7 @@ void time_init(void) {
 		uint8_t mask = inb(0x21);
 		mask &= ~(1 << 0);
 		outb(0x21, mask);
-		asm volatile("sti\n\thlt\n\thlt\n\thlt");
+		asm volatile("sti\n\thlt\n\thlt\n\tcli");
 	}
 
 	/// TODO: Initialize system time and set up timer interrupts
