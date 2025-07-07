@@ -81,7 +81,7 @@ int vprintf(const char *format, va_list args) {
 			case 'h':
 				if (length == 0) {
 					length = -1;
-				} else if (length == 1) {
+				} else if (length == -1) {
 					length = -2;
 				} else {
 					return -1;
@@ -273,6 +273,8 @@ int vprintf(const char *format, va_list args) {
 		} else if (type == 's') {
 			const char *str = va_arg(args, const char *);
 			if (precision < 0) {
+				count += puts(str);
+			} else {
 #ifdef __is_libk
 				size_t str_len = min(strlen(str), precision);
 				tty_write(str, str_len);
@@ -283,8 +285,6 @@ int vprintf(const char *format, va_list args) {
 					count++;
 				}
 #endif
-			} else {
-				count += puts(str);
 			}
 		} else if (type == 'n') {
 			int *ptr = va_arg(args, int *);

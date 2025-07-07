@@ -4,6 +4,8 @@
 
 #include <stdio.h>
 
+#include <kernel/acpi.h>
+#include <kernel/efi.h>
 #include <kernel/kmalloc.h>
 #include <kernel/log.h>
 #include <kernel/mman.h>
@@ -37,10 +39,16 @@ static volatile struct limine_hhdm_request hhdm_request = {
 	.revision = 0,
 };
 
-extern void _kernel_end;
+__attribute__((used, section(".limine_requests"))) //
+static volatile struct limine_efi_system_table_request efi_system_table_request = {
+	.id = LIMINE_EFI_SYSTEM_TABLE_REQUEST,
+	.revision = 0,
+};
 
 __attribute__((used, section(".limine_requests_end"))) //
 static volatile LIMINE_REQUESTS_END_MARKER;
+
+extern void _kernel_end;
 
 __attribute__((noreturn)) void kmain(void);
 
@@ -99,12 +107,9 @@ __attribute__((naked, noreturn)) void kinit(void) {
 				 "mov cr4, rax"
 				 : : : "rax");
 
-	// Initialize interrupt handlers
 	isr_init();
 
 	tty_init(framebuffer_request.response->framebuffers[0]);
-
-	// Initialize serial port
 	serial_init();
 
 	// Initialize memory management
@@ -115,8 +120,9 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	vmem_init();
 	kmalloc_init();
 
-	// Initialize time subsystem
 	time_init();
+
+	acpi_init(efi_system_table_request.response ? (void *)efi_system_table_request.response->address : NULL);
 
 	kmain();
 }

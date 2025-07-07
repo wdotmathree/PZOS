@@ -168,22 +168,22 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	// Find old page tables for kernel mappings
 	uint64_t *old_pml4;
 	asm("mov %0, cr3" : "=r"(old_pml4));
-	old_pml4 = (uint64_t *)((uintptr_t)old_pml4 + hhdm_off);
+	old_pml4 = (uint64_t *)(hhdm_off + (uintptr_t)old_pml4);
 
 	// Map kernel executable
 	// Go through old page tables and copy
-	pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(pml4[0x1ff]) + hhdm_off);
+	pdpt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(pml4[0x1ff]));
 	pd = (uint64_t *)(hhdm_off + alloc_page());
 	pdpt[0x1fe] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW;
 	memset(pd, 0, 0x1000);
-	uint64_t *old_pdpt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pml4[0x1ff]) + hhdm_off);
-	uint64_t *old_pd = (uint64_t *)(TABLE_ENTRY_ADDR(old_pdpt[0x1fe]) + hhdm_off);
+	uint64_t *old_pdpt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pml4[0x1ff]));
+	uint64_t *old_pd = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pdpt[0x1fe]));
 	for (size_t j = 0; j < 512; j++) {
 		if (old_pd[j] & PAGE_PRESENT) {
 			pt = (uint64_t *)(hhdm_off + alloc_page());
 			pd[j] = ((uintptr_t)pt - hhdm_off) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
 			memset(pt, 0, 0x1000);
-			uint64_t *old_pt = (uint64_t *)(TABLE_ENTRY_ADDR(old_pd[j]) + hhdm_off);
+			uint64_t *old_pt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pd[j]));
 			for (size_t k = 0; k < 512; k++) {
 				pt[k] = old_pt[k] & ~(PAGE_USER | PAGE_ACCESSED | PAGE_DIRTY);
 			}
