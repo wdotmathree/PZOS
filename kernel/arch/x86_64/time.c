@@ -41,7 +41,7 @@ struct isr_frame_t *calibrate_tsc(struct isr_frame_t *const frame) {
 
 		tsc_freq = elapsed * 18.206507364908855; // Approximate frequency of the PIT
 		_get_time = get_time_tsc;
-		LOG("tsc", "Detected CPU frequency: %llu MHz", tsc_freq / 1000000);
+		LOG("TSC", "Detected CPU frequency: %llu MHz", tsc_freq / 1000000);
 
 		// Cleanup
 		uint8_t mask = inb(0x21);
@@ -84,10 +84,10 @@ void time_init(void) {
 	}
 
 	if (tsc_invariant) {
-		LOG("tsc", "Invariant TSC frequency: %llu MHz", tsc_freq);
+		LOG("TSC", "Invariant TSC frequency: %llu MHz", tsc_freq);
 		_get_time = get_time_tsc;
 	} else {
-		LOG("tsc", "TSC is not invariant, using PIT to calibrate");
+		LOG("TSC", "TSC is not invariant, using PIT to calibrate");
 
 		// Initialize PIT to mode 2 with lowest frequency
 		outb(0x43, 0b00110100);

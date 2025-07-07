@@ -58,9 +58,9 @@ PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 	limine/limine bios-install PZOS.bin
 
 test: img
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout # -bios /usr/share/OVMF/OVMF_CODE.fd
 	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -d int -D logfile -no-reboot # -bios /usr/share/OVMF/OVMF_CODE.fd
-	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio # -bios /usr/share/OVMF/OVMF_CODE.fd
+	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio # -bios /usr/share/OVMF/OVMF_CODE.fd
+	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -bios /usr/share/OVMF/OVMF_CODE.fd
 
 debug: TARGET := debug
 debug: img

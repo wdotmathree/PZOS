@@ -27,14 +27,18 @@ static uint64_t *bitmap;
 static uint64_t *page_stack;
 static uint64_t *page_stack_base;
 
+uintptr_t hhdm_off;
+
 // Our definition of "high memory" is everything above **16MiB** (not usable for ISA DMA) instead of the usual 1MiB
-void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_t hhdm_off, uintptr_t kernel_end) {
+void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_t hhdm_offset, uintptr_t kernel_end) {
 	// Usable and bootloader reclaimable chunks are guaranteed to not overlap and are page aligned
 	size_t count = mmap->entry_count;
 	size_t max_addr = 0;
 
 	uintptr_t framebuf_base = 0;
 	intptr_t framebuf_size = 0;
+
+	hhdm_off = hhdm_offset;
 
 	// Print memory map entries for logging
 	size_t mem_size = 0;
@@ -158,29 +162,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		framebuf_size -= 0x1000;
 	}
 
-	// Map the pages containing memory map pointers (temporary)
-	struct limine_memmap_entry **entries = mmap->entries;
-	ptr = (uintptr_t)mmap->entries - hhdm_off;
-	vptr = BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, 0);
-	uintptr_t end = (uintptr_t)(mmap->entries + mmap->entry_count) - 1 - hhdm_off;
-	pdpt = (uint64_t *)(hhdm_off + alloc_page());
-	pml4[0x100] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-	memset(pdpt, 0, 0x1000);
-	pd = (uint64_t *)(hhdm_off + alloc_page());
-	pdpt[0x000] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-	memset(pd, 0, 0x1000);
-	pt = (uint64_t *)(hhdm_off + alloc_page());
-	pd[0x100] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-	memset(pt, 0, 0x1000);
-	mmap->entries = (struct limine_memmap_entry **)vptr;
-	while (ptr <= end) {
-		pt[LINADDR_PTE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
-		ptr += 0x1000;
-		vptr += 0x1000;
-	};
-
 	// Recursive page table entry
-	// Using this requires us to map every non-page entry as R/W so we can modify tables
 	pml4[0x1fe] = ((uintptr_t)pml4 - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PWT;
 
 	// Find old page tables for kernel mappings
@@ -207,47 +189,64 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 			}
 		}
 	}
-	// Add memory management stuff
-	ptr = ((uintptr_t)bitmap - hhdm_off);
-	vptr = 0xffffff8000000000;
-	intptr_t size = reserve * 0x1000;
-	while (size > 0) {
-		if (pdpt[LINADDR_PDPTE(vptr)] == 0) {
+
+	// Direct map
+	ptr = 0;
+	while (max_addr - ptr >= 0x40000000) {
+		if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
+			pdpt = (uint64_t *)(hhdm_off + alloc_page());
+			pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			memset(pdpt, 0, 0x1000);
+		}
+		pdpt[LINADDR_PDPTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WC);
+		ptr += 0x40000000;
+	}
+	while (max_addr - ptr >= 0x200000) {
+		if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
+			pdpt = (uint64_t *)(hhdm_off + alloc_page());
+			pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			memset(pdpt, 0, 0x1000);
+		}
+		if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
 			pd = (uint64_t *)(hhdm_off + alloc_page());
-			pdpt[LINADDR_PDPTE(vptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pd, 0, 0x1000);
 		}
-		if (pd[LINADDR_PDE(vptr)] == 0) {
+		pd[LINADDR_PDE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WC);
+		ptr += 0x200000;
+	}
+	while (max_addr - ptr < 0x200000) { // Detect overflow
+		if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
+			pdpt = (uint64_t *)(hhdm_off + alloc_page());
+			pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			memset(pdpt, 0, 0x1000);
+		}
+		if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
+			pd = (uint64_t *)(hhdm_off + alloc_page());
+			pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			memset(pd, 0, 0x1000);
+		}
+		if (pd[LINADDR_PDE(ptr)] == 0) {
 			pt = (uint64_t *)(hhdm_off + alloc_page());
-			pd[LINADDR_PDE(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+			pd[LINADDR_PDE(ptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 			memset(pt, 0, 0x1000);
 		}
-		pt[LINADDR_PTE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+		pt[LINADDR_PTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WC);
 		ptr += 0x1000;
-		vptr += 0x1000;
-		size -= 0x1000;
 	}
 
-	// Prepare for page table switch
-	*framebuf = (uint8_t *)0xfffff80000000000;
-	bitmap = (uint64_t *)0xffffff8000000000;
-	size_t stack_off = (uintptr_t)page_stack - (uintptr_t)page_stack_base;
-	page_stack_base = (uint64_t *)((uintptr_t)bitmap + bitmap_size);
-	page_stack = (uint64_t *)((uintptr_t)page_stack_base + stack_off);
+	// Switch to our new page tables
 	asm("add rsp, %0\n\t"
 		"add rbp, %0\n\t"
-		"mov cr3, %1"
-		: : "g"(0xffffffff80000000 - stack_base), "r"((uintptr_t)pml4 - hhdm_off), "n"(KERNEL_CS));
+		"mov cr3, %1" : : "g"(0xffffffff80000000 - stack_base),
+						  "r"((uintptr_t)pml4 - hhdm_off), "n"(KERNEL_CS));
 
 	LOG("MMAN", "Page tables initialized successfully.");
 	LOG("MMAN", "PML4 is at %p", (uintptr_t)pml4 - hhdm_off);
 
 	// Reclaim bootloader reclaimable memory
-	entries = (struct limine_memmap_entry **)BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, LINADDR_OFF((uintptr_t)entries));
 	for (size_t i = 0; i < count; i++) {
-		uintptr_t old_entry = (uintptr_t)entries[i];
-		struct limine_memmap_entry *entry = (struct limine_memmap_entry *)BUILD_LINADDR(0x180, 0x000, 0x000, 0x000, old_entry - hhdm_off);
-		map_page(entry, (void *)(old_entry - hhdm_off), PAGE_PRESENT | PAGE_NX);
+		struct limine_memmap_entry *entry = mmap->entries[i];
 		if (entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
 			size_t start_page = entry->base / 0x1000;
 			size_t end_page = (entry->base + entry->length - 1) / 0x1000;
@@ -262,24 +261,6 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 			}
 		}
 	}
-	uintptr_t last_entry = 0;
-	for (size_t i = 0; i < count; i++) {
-		uintptr_t old_entry = (uintptr_t)entries[i];
-		struct limine_memmap_entry *entry = (struct limine_memmap_entry *)BUILD_LINADDR(0x180, 0x000, 0x000, 0x000, old_entry - hhdm_off);
-		if ((old_entry & -0x1000) != last_entry)
-			unmap_page(entry);
-		last_entry = old_entry & -0x1000;
-	}
-
-	// Unmap the temporary memory map pointers
-	for (size_t i = 0; i < (count + 1) * sizeof(struct limine_memmap_entry *); i += 0x1000) {
-		vptr = BUILD_LINADDR(0x100, 0x000, 0x100, 0x000, i);
-		unmap_page((void *)vptr);
-	}
-	free_page((void *)TABLE_ENTRY_ADDR(*LINADDR_PDE_PTR((uintptr_t)entries)));
-	free_page((void *)TABLE_ENTRY_ADDR(*LINADDR_PDPTE_PTR((uintptr_t)entries)));
-	free_page((void *)TABLE_ENTRY_ADDR(*LINADDR_PML4E_PTR((uintptr_t)entries)));
-	invltlb();
 
 	LOG("MMAN", "Memory management initialized successfully.");
 }

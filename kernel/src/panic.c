@@ -13,7 +13,7 @@ __attribute__((noreturn)) void _panic(struct isr_frame_t *frame, const char *msg
 	if (msg != NULL) {
 		va_list args;
 		va_start(args, msg);
-		LOGn(NULL, "Kernel panic: ");
+		LOGn("Kernel panic", "");
 		vprintf(msg, args);
 		va_end(args);
 	} else {

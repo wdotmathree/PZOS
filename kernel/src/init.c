@@ -59,12 +59,18 @@ __attribute__((naked, noreturn)) void kinit(void) {
 
 	// Initialize TSC base (TSC count when the kernel was loaded)
 	{
-		extern uint64_t tsc_base;
-		uint64_t lo, hi;
-		asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
-		tsc_base = ((uint64_t)hi << 32) | lo;
+		uint32_t eax = 1, ebx, ecx, edx;
+		asm volatile("cpuid"
+					 : "+a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx));
+		if (edx & (1 << 4)) {
+			extern uint64_t tsc_base;
+			uint64_t lo, hi;
+			asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
+			tsc_base = ((uint64_t)hi << 32) | lo;
+		}
 	}
 
+	// Verify we were loaded correctly
 	asm volatile("cli");
 	if (!LIMINE_BASE_REVISION_SUPPORTED)
 		hcf();
