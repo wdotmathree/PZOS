@@ -87,7 +87,7 @@ void time_init(void) {
 		LOG("TSC", "Invariant TSC frequency: %llu MHz", tsc_freq);
 		_get_time = get_time_tsc;
 	} else {
-		LOG("TSC", "TSC is not invariant, using PIT to calibrate");
+		LOG("TSC", "TSC frequency is not available, using PIT to calibrate");
 
 		// Initialize PIT to mode 2 with lowest frequency
 		outb(0x43, 0b00110100);

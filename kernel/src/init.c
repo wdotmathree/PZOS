@@ -10,6 +10,7 @@
 #include <kernel/log.h>
 #include <kernel/mman.h>
 #include <kernel/panic.h>
+#include <kernel/pci.h>
 #include <kernel/serial.h>
 #include <kernel/time.h>
 #include <kernel/tty.h>
@@ -112,6 +113,8 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	tty_init(framebuffer_request.response->framebuffers[0]);
 	serial_init();
 
+	time_init();
+
 	// Initialize memory management
 	if (memory_map_request.response == NULL)
 		panic("Memory map request failed");
@@ -120,9 +123,9 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	vmem_init();
 	kmalloc_init();
 
-	time_init();
-
 	acpi_init(efi_system_table_request.response ? (void *)efi_system_table_request.response->address : NULL);
+
+	pci_init(); // Currently just a stub
 
 	kmain();
 }

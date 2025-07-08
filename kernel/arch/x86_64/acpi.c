@@ -55,6 +55,8 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 				}
 			}
 		}
+
+		LOG("ACPI", "RSDP found at %p", rsdp);
 	} else {
 		system_table = (EFI_SYSTEM_TABLE *)(hhdm_off + (uintptr_t)system_table);
 
@@ -118,4 +120,6 @@ void *acpi_get_table(acpi_sig_t signature) {
 			}
 		}
 	}
+
+	return NULL;
 }

@@ -3,7 +3,7 @@
  * PML4[0x100-0x17f] 0x800000000-0xbffffffff: Direct map (max 64TiB)
  * PML4[0x180] 0xc00000000: Kernel heap - Can expand up to 8TiB (16 PML4 entries)
  * PML4[0x1a0] 0xd00000000: Kernel virtual area - Can expand up to 8TiB (16 PML4 entries)
- * PML4[0x1c0] 0xe00000000: I/O mappings - Can expand up to 8TiB (16 PML4 entries)
+ * PML4[0x1c0] 0xe00000000: Modules - Can expand up to 8TiB (16 PML4 entries)
  * PML4[0x1f0] 0xf80000000: Framebuffer (Mapped using large pages if possible)
  * PML4[0x1ff] 0xff8000000: Kernel execution space
  * 		L--> (0xff8000000-0xfffefffff): Memory management information (bitmaps, stacks, etc.)
