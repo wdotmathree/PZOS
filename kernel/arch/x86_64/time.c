@@ -99,7 +99,7 @@ void time_init(void) {
 		uint8_t mask = inb(0x21);
 		mask &= ~(1 << 0);
 		outb(0x21, mask);
-		asm volatile("sti\n\thlt\n\thlt\n\tcli");
+		asm volatile("hlt\n\thlt");
 	}
 
 	/// TODO: Initialize system time and set up timer interrupts

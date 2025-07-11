@@ -56,7 +56,8 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 			}
 		}
 
-		LOG("ACPI", "RSDP found at %p", rsdp);
+		if (rsdp != NULL)
+			LOG("ACPI", "RSDP found at %p", rsdp);
 	} else {
 		system_table = (EFI_SYSTEM_TABLE *)(hhdm_off + (uintptr_t)system_table);
 

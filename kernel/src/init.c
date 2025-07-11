@@ -6,6 +6,7 @@
 
 #include <kernel/acpi.h>
 #include <kernel/efi.h>
+#include <kernel/kbd.h>
 #include <kernel/kmalloc.h>
 #include <kernel/log.h>
 #include <kernel/mman.h>
@@ -126,6 +127,8 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	acpi_init(efi_system_table_request.response ? (void *)efi_system_table_request.response->address : NULL);
 
 	pci_init(); // Currently just a stub
+
+	kbd_init();
 
 	kmain();
 }

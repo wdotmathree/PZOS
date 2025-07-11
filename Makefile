@@ -58,15 +58,15 @@ PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 	limine/limine bios-install PZOS.bin
 
 test: img
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -d int -D logfile -no-reboot # -bios /usr/share/OVMF/OVMF_CODE.fd
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio -machine q35 -bios /usr/share/OVMF/OVMF_CODE.fd
-	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -machine q35 -bios /usr/share/OVMF/OVMF_CODE.fd
+	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -d unimp,guest_errors -D logfile -no-reboot # -bios /usr/share/OVMF/OVMF_CODE.fd
+	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -machine q35 -bios /usr/share/OVMF/OVMF_CODE.fd
+	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio -machine q35 # -bios /usr/share/OVMF/OVMF_CODE.fd
 
 debug: TARGET := debug
 debug: img
 	# gdb -ex "target remote :1234" -se "kernel/kernel.elf"
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -s -S -bios /usr/share/OVMF/OVMF_CODE.fd
-	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -machine q35 -s -S -bios /usr/share/OVMF/OVMF_CODE.fd
+	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -s -S -machine q35 -bios /usr/share/OVMF/OVMF_CODE.fd
+	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio -s -S -machine q35 # -bios /usr/share/OVMF/OVMF_CODE.fd
 
 clean:
 	$(MAKE) -C kernel clean

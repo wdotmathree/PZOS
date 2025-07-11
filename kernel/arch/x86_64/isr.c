@@ -71,6 +71,8 @@ void isr_init(void) {
 
 	// Initialize PICs
 	PIC_init();
+
+	asm volatile("sti");
 }
 
 void register_isr(uint8_t num, isr_handler_t handler, uint8_t dpl) {

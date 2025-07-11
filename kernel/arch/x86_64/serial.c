@@ -38,7 +38,8 @@ char serial_read(void) {
 	if (!ready)
 		return -1;
 
-	while ((inb(COM1 + 5) & 0x01) == 0);
+	while ((inb(COM1 + 5) & 0x01) == 0)
+		io_wait();
 	return inb(COM1);
 }
 
@@ -46,6 +47,7 @@ void serial_write(char c) {
 	if (!ready)
 		return;
 
-	while ((inb(COM1 + 5) & 0x20) == 0);
+	while ((inb(COM1 + 5) & 0x20) == 0)
+		io_wait();
 	outb(COM1, c);
 }

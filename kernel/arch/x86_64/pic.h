@@ -28,4 +28,37 @@ static void PIC_init(void) {
 	outb(0xa1, 0xff);
 }
 
+static void PIC_mask(uint8_t irq) {
+	if (irq < 8) {
+		uint8_t mask = inb(0x21);
+		mask |= (1 << irq);
+		outb(0x21, mask);
+	} else {
+		uint8_t mask = inb(0xa1);
+		mask |= (1 << (irq - 8));
+		outb(0xa1, mask);
+	}
+}
+
+static void PIC_unmask(uint8_t irq) {
+	if (irq < 8) {
+		uint8_t mask = inb(0x21);
+		mask &= ~(1 << irq);
+		outb(0x21, mask);
+	} else {
+		uint8_t mask = inb(0xa1);
+		mask &= ~(1 << (irq - 8));
+		outb(0xa1, mask);
+	}
+}
+
+static void PIC_eoi(uint8_t irq) {
+	if (irq < 8) {
+		outb(0x20, 0x20);
+	} else {
+		outb(0xa0, 0x20);
+		outb(0x20, 0x20);
+	}
+}
+
 #endif
