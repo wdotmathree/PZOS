@@ -7,16 +7,16 @@
 
 #include <kernel/log.h>
 
-void get_time_default(struct timeval_t *tv) {
+void get_time_default(timeval_t *tv) {
 	tv->secs = 0;
 	tv->usecs = 0;
 }
 
-void (*_get_time)(struct timeval_t *tv) = get_time_default;
+void (*_get_time)(timeval_t *tv) = get_time_default;
 
 static uint64_t tsc_freq; // Hz
 uint64_t tsc_base; // Base TSC value when kernel was loaded
-void get_time_tsc(struct timeval_t *tv) {
+void get_time_tsc(timeval_t *tv) {
 	uint32_t lo, hi;
 	asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
 	uint64_t tsc = (((uint64_t)hi << 32) | lo) - tsc_base;
@@ -25,7 +25,7 @@ void get_time_tsc(struct timeval_t *tv) {
 }
 
 static int calibrate_state = 0;
-struct isr_frame_t *calibrate_tsc(struct isr_frame_t *const frame) {
+isr_frame_t *calibrate_tsc(isr_frame_t *const frame) {
 	if (calibrate_state == 0) {
 		calibrate_state = 1;
 		// Note down the current TSC value

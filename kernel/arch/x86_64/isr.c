@@ -8,7 +8,25 @@
 #include <kernel/defines.h>
 #include <kernel/panic.h>
 
-struct isr_frame_t *default_isr(struct isr_frame_t *const);
+struct idt_entry {
+	uint16_t isr_low;
+	uint16_t kernel_cs;
+	uint8_t ist;
+	uint8_t attributes;
+	uint16_t isr_mid;
+	uint32_t isr_high;
+	uint32_t reserved;
+} __attribute__((packed));
+
+struct gdt_entry {
+	uint16_t limit_low;
+	uint16_t base_low;
+	uint8_t base_mid;
+	uint16_t flags; // contains limit_high
+	uint8_t base_high;
+} __attribute__((packed));
+
+isr_frame_t *default_isr(isr_frame_t *const);
 
 static struct gdt_entry gdt[5] = {
 	{0}, // Null descriptor
@@ -85,7 +103,7 @@ void unregister_isr(uint8_t num) {
 	isr_vectors[num] = default_isr; // Reset to default handler
 }
 
-struct isr_frame_t *default_isr(struct isr_frame_t *const frame) {
+isr_frame_t *default_isr(isr_frame_t *const frame) {
 	switch (frame->irq_num) {
 	case 0x08: // Double fault
 		// Too unsafe to call panic, just print state and halt

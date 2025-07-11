@@ -9,10 +9,10 @@
 #include <kernel/paging.h>
 #include <kernel/panic.h>
 
-static struct vma *vma_list = NULL;
-static struct vma *vma_free_list = NULL;
+static vma_list_t *vma_list = NULL;
+static vma_list_t *vma_free_list = NULL;
 
-struct isr_frame_t *page_fault_handler(struct isr_frame_t *const frame) {
+isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
 	uintptr_t addr;
 	uint16_t error = frame->error_code;
 	asm volatile("mov %0, cr2" : "=r"(addr));
@@ -24,7 +24,7 @@ struct isr_frame_t *page_fault_handler(struct isr_frame_t *const frame) {
 	}
 
 	// Find a VMA that covers the faulting address
-	struct vma *vma = vma_list;
+	vma_list_t *vma = vma_list;
 	while (vma) {
 		if ((uintptr_t)vma->base <= addr && addr < (uintptr_t)vma->base + vma->size)
 			break;
@@ -41,20 +41,20 @@ struct isr_frame_t *page_fault_handler(struct isr_frame_t *const frame) {
 	return frame;
 }
 
-static struct vma *alloc_vma(void) {
+static vma_list_t *alloc_vma(void) {
 	if (vma_free_list) {
-		struct vma *vma = vma_free_list;
+		vma_list_t *vma = vma_free_list;
 		vma_free_list = vma->next;
 		return vma;
 	}
 
 	// Find a free virtual page
-	struct vma *free_addr = (struct vma *)vmalloc(PAGE_SIZE, VMA_READ | VMA_WRITE);
+	vma_list_t *free_addr = (vma_list_t *)vmalloc(PAGE_SIZE, VMA_READ | VMA_WRITE);
 	// Allocate a new VMA cache block
 	// map_page(free_addr, (void *)alloc_page(), PAGE_RW | PAGE_NX);
-	for (size_t i = 1; i < PAGE_SIZE / sizeof(struct vma); i++) {
-		struct vma *a = &free_addr[i - 1];
-		struct vma *b = &free_addr[i];
+	for (size_t i = 1; i < PAGE_SIZE / sizeof(vma_list_t); i++) {
+		vma_list_t *a = &free_addr[i - 1];
+		vma_list_t *b = &free_addr[i];
 		a->next = b;
 		b->prev = a;
 	}
@@ -64,7 +64,7 @@ static struct vma *alloc_vma(void) {
 	return free_addr;
 }
 
-static void free_vma(struct vma *vma) {
+static void free_vma(vma_list_t *vma) {
 	vma->next = vma_free_list;
 	vma_free_list = vma;
 }
@@ -72,10 +72,10 @@ static void free_vma(struct vma *vma) {
 void vmem_init(void) {
 	// Initialize the VMA list
 	map_page((void *)VMEM_VIRT_BASE, (void *)alloc_page(), PAGE_RW | PAGE_NX);
-	vma_free_list = (struct vma *)VMEM_VIRT_BASE;
-	for (size_t i = 1; i < PAGE_SIZE / sizeof(struct vma); i++) {
-		struct vma *a = &vma_free_list[i - 1];
-		struct vma *b = &vma_free_list[i];
+	vma_free_list = (vma_list_t *)VMEM_VIRT_BASE;
+	for (size_t i = 1; i < PAGE_SIZE / sizeof(vma_list_t); i++) {
+		vma_list_t *a = &vma_free_list[i - 1];
+		vma_list_t *b = &vma_free_list[i];
 		a->next = b;
 		b->prev = a;
 	}
@@ -99,13 +99,13 @@ void vmem_init(void) {
 }
 
 void create_vma(void *base, size_t size, uint64_t flags) {
-	struct vma *vma = alloc_vma();
+	vma_list_t *vma = alloc_vma();
 	vma->base = base;
 	vma->size = size;
 	vma->flags = flags;
 
-	struct vma *prev = NULL;
-	struct vma *curr = vma_list;
+	vma_list_t *prev = NULL;
+	vma_list_t *curr = vma_list;
 	while (curr && curr->base < base) {
 		prev = curr;
 		curr = curr->next;
@@ -126,7 +126,7 @@ void create_vma(void *base, size_t size, uint64_t flags) {
 	}
 }
 
-void destroy_vma(struct vma *vma) {
+void destroy_vma(vma_list_t *vma) {
 	if (vma->prev)
 		vma->prev->next = vma->next;
 	else
@@ -139,8 +139,8 @@ void destroy_vma(struct vma *vma) {
 }
 
 void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
-	struct vma *prev = vma_list;
-	struct vma *curr = vma_list->next; // Guaranteed to exist since we always have at least 4 mappings
+	vma_list_t *prev = vma_list;
+	vma_list_t *curr = vma_list->next; // Guaranteed to exist since we always have at least 4 mappings
 	while (curr) {
 		if (prev->base >= start) {
 			if (prev->base + prev->size + npages * PAGE_SIZE <= curr->base) {

@@ -5,7 +5,7 @@
 
 isr_handler_t kbd_handler = NULL;
 
-struct isr_frame_t *kbd_isr_stub(struct isr_frame_t *const frame) {
+isr_frame_t *kbd_isr_stub(isr_frame_t *const frame) {
 	PIC_eoi(1);
 
 	if (kbd_handler != NULL)

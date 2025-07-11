@@ -10,7 +10,7 @@
 
 #define panic(args...)                                \
 	do {                                              \
-		struct isr_frame_t *ptr;                      \
+		isr_frame_t *ptr;                             \
 		asm volatile("push rsp\n\t"                   \
 					 "pushfq\n\t"                     \
 					 "sub rsp, 0x20\n\t"              \
@@ -35,7 +35,7 @@
 		__builtin_unreachable();                      \
 	} while (0)
 
-__attribute__((noreturn)) void _panic(struct isr_frame_t *, const char *msg, ...);
+__attribute__((noreturn)) void _panic(isr_frame_t *, const char *msg, ...);
 
 __attribute__((noreturn)) static inline void hcf(void) {
 	while (1) {

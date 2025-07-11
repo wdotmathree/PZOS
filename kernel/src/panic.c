@@ -8,7 +8,7 @@
 
 extern int vprintf(const char *, va_list);
 
-__attribute__((noreturn)) void _panic(struct isr_frame_t *frame, const char *msg, ...) {
+__attribute__((noreturn)) void _panic(isr_frame_t *frame, const char *msg, ...) {
 	tty_putchar('\n');
 	if (msg != NULL) {
 		va_list args;

@@ -43,18 +43,18 @@
 #define PF_RESERVED 0x8
 #define PF_NX 0x10
 
-struct vma {
+typedef struct vma_list_t {
 	void *base;
 	size_t size;
 	uint64_t flags;
 
-	struct vma *next;
-	struct vma *prev;
-};
+	struct vma_list_t *next;
+	struct vma_list_t *prev;
+} vma_list_t;
 
 void vmem_init(void);
 void create_vma(void *base, size_t size, uint64_t flags);
-void destroy_vma(struct vma *vma);
+void destroy_vma(vma_list_t *vma);
 
 // Allocates `npages` pages of virtual memory, initially not backed by anything
 void *vmalloc(size_t npages, uint64_t flags);

@@ -10,17 +10,7 @@
 
 #define IDT_SIZE 256
 
-struct idt_entry {
-	uint16_t isr_low;
-	uint16_t kernel_cs;
-	uint8_t ist;
-	uint8_t attributes;
-	uint16_t isr_mid;
-	uint32_t isr_high;
-	uint32_t reserved;
-} __attribute__((packed));
-
-struct isr_frame_t {
+typedef struct {
 	uint64_t r15;
 	uint64_t r14;
 	uint64_t r13;
@@ -45,21 +35,13 @@ struct isr_frame_t {
 	uint64_t isr_rflags;
 	uint64_t isr_rsp;
 	uint64_t isr_ss;
-};
+} isr_frame_t;
 
 #define KERNEL_CS (1 << 3)
 #define KERNEL_DS (2 << 3)
 #define TSS (5 << 3) // For the future
 
-typedef struct isr_frame_t *(*isr_handler_t)(struct isr_frame_t *const);
-
-struct gdt_entry {
-	uint16_t limit_low;
-	uint16_t base_low;
-	uint8_t base_mid;
-	uint16_t flags; // contains limit_high
-	uint8_t base_high;
-} __attribute__((packed));
+typedef isr_frame_t *(*isr_handler_t)(isr_frame_t *const);
 
 void isr_init(void);
 
