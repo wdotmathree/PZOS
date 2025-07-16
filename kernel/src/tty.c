@@ -31,16 +31,27 @@ static size_t buf_width;
 static size_t buf_height;
 static size_t buf_pitch;
 
+static size_t cur_x = -1;
+static size_t cur_y = -1;
 static void tty_drawcursor(void) {
+	// Delete the old cursor
+	if (cur_x != -1 && cur_y != -1) {
+		size_t idx = buf_pitch * cur_y * GLYPH_HEIGHT + 4 * cur_x * GLYPH_WIDTH;
+		for (int i = 0; i < GLYPH_HEIGHT; i++) {
+			memcpy(tty_buf + idx, backbuf + idx, GLYPH_WIDTH * 4);
+			idx += buf_pitch;
+		}
+	}
+	cur_x = tty_col;
+	cur_y = tty_row;
+
 	// Bottom of current cell
 	const size_t x = tty_col * GLYPH_WIDTH;
 	const size_t y = tty_row * GLYPH_HEIGHT + (int)(0.9 * GLYPH_HEIGHT);
 	size_t idx = buf_pitch * y + 4 * x;
 	for (int i = 0; i < GLYPH_WIDTH; i++) {
-		((uint32_t *)(tty_buf + idx))[i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
-		((uint32_t *)(tty_buf + idx + buf_pitch))[i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
-		((uint32_t *)(backbuf + idx))[i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
-		((uint32_t *)(backbuf + idx + buf_pitch))[i] = ANSI_3BIT_COLORS[ANSI_COLOR_WHITE];
+		((uint32_t *)(tty_buf + idx))[i] = tty_color & 0xffffff;
+		((uint32_t *)(tty_buf + idx + buf_pitch))[i] = tty_color & 0xffffff;
 	}
 }
 
@@ -112,6 +123,13 @@ static void tty_clearcell(size_t x, size_t y) {
 		memset(backbuf + index, 0, GLYPH_WIDTH * 4);
 		index += buf_pitch;
 	}
+}
+
+static void tty_clearline(size_t y) {
+	size_t index = buf_pitch * y * GLYPH_HEIGHT;
+	memset(tty_buf + index, 0, buf_pitch * GLYPH_HEIGHT);
+	memset(backbuf + index, 0, buf_pitch * GLYPH_HEIGHT);
+	used[y] = 0;
 }
 
 static void tty_blitchar(char c, size_t x, size_t y) {
@@ -264,7 +282,6 @@ static int parsecontrol(const char *s) {
 			return i + 1;
 
 		case '\n':
-			tty_clearcell(tty_col, tty_row);
 			if (++tty_row == tty_height) {
 				tty_scroll();
 				tty_row--;
@@ -274,18 +291,11 @@ static int parsecontrol(const char *s) {
 			break;
 
 		case '\b':
-			if (--tty_col > tty_width) {
-				if (tty_row == 0) {
-					tty_col++;
-					break;
-				}
-				tty_col += tty_width;
-				tty_row--;
-			}
+			if (--tty_col >= tty_width)
+				tty_col++;
 			break;
 
 		case '\t':
-			tty_clearcell(tty_col, tty_row);
 			tty_col += TAB_WIDTH - tty_col % TAB_WIDTH;
 			if (tty_col >= tty_width) {
 				tty_col = 0;
@@ -298,7 +308,6 @@ static int parsecontrol(const char *s) {
 			break;
 
 		case '\r':
-			tty_clearcell(tty_col, tty_row);
 			tty_col = 0;
 			tty_drawcursor();
 			break;
@@ -358,9 +367,23 @@ void tty_write(const char *data, size_t size) {
 		for (; off-- > 0; i++)
 			serial_write(data[i]);
 
-		if (i < size)
-			tty_putchar(data[i]);
+		if (i < size) {
+			if (off) {
+				tty_putchar(data[i]);
+				continue;
+			}
+
+			tty_blitchar(data[i], tty_col, tty_row);
+			if (++tty_col == tty_width) {
+				tty_col = 0;
+				if (++tty_row == tty_height) {
+					tty_scroll();
+					tty_row--;
+				}
+			}
+		}
 	}
+	tty_drawcursor();
 }
 
 int tty_puts(const char *data) {

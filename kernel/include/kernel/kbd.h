@@ -2,6 +2,9 @@
 #ifndef KERNEL_KBD_H
 #define KERNEL_KBD_H
 
+#include <stdbool.h>
+#include <stdint.h>
+
 // clang-format off
 enum KeyCode {
 	Key_LCtrl = 0x00, Key_LMeta, Key_LAlt, Key_Space, Key_RAlt, Key_RMeta, Key_Menu, Key_RCtrl,
@@ -24,6 +27,23 @@ enum KeyCode {
 };
 // clang-format on
 
+enum KeyFlags {
+	KeyFlag_None = 0,
+	KeyFlag_Released = 1 << 0,
+	KeyFlag_Control = 1 << 1,
+	KeyFlag_Shift = 1 << 2,
+	KeyFlag_Alt = 1 << 3,
+};
+
+typedef struct {
+	uint8_t code;
+	enum KeyFlags flags;
+	char codepoint;
+} keystroke_t;
+
 void kbd_init(void);
+
+keystroke_t kbd_read(void);
+bool kbd_isdown(uint8_t key);
 
 #endif

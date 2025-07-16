@@ -26,9 +26,35 @@ static uint8_t extended_map[] = {
 	0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0x6f,0xff,0x0e,0x8f,0xff,0xff,0xff,
 	0x8e,0x6e,0x0f,0xff,0x10,0x2f,0xff,0xb0,0xff,0xff,0x70,0xff,0xae,0x90,
 };
+
+static char codepoint_map[] = {
+	0, 0, 0, ' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, '0', 0, '.', '\n', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 0, 0, 0, 0,
+	0, 0, '1', '2', '3', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', '\'', '\n', 0, 0, 0, 0,
+	'4', '5', '6', '+', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	'\t', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\',
+	0, 0, 0, '7', '8', '9', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	'`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', '\b',
+	0, 0, 0, 0, '/', '*', '-'
+};
+
+static char shifted_map[] = {
+	0, 0, 0, ' ', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, '\n', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 'Z', 'X', 'C', 'V', 'B', 'N', 'M', '<', '>', '?', 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 'A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', ':', '"', '\n', 0, 0, 0, 0,
+	0, 0, 0, '+', 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	'\t', 'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '{', '}', '|',
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	'~', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '_', '+', 0,
+	0, 0, 0, 0, '/', '*', '-'
+};
 // clang-format on
 
-static char rbuf[256];
+static keystroke_t rbuf[256];
 static uint8_t rbuf_ridx = 0;
 static uint8_t rbuf_widx = 0;
 
@@ -38,6 +64,8 @@ static uint8_t wbuf_widx = 0;
 static uint8_t retry_cnt = 0;
 
 static bool active = false;
+
+static bool keystates[256] = {false};
 
 typedef enum {
 	STATE_NORMAL = 0,
@@ -104,20 +132,49 @@ static isr_frame_t *kbd_isr(isr_frame_t *const frame) {
 				key = normal_map[scancode];
 		}
 
-		if (current_state & STATE_BREAK)
-			LOG("KBD", "Key released: 0x%02x", key);
-		else
-			LOG("KBD", "Key pressed: 0x%02x", key);
+		enum KeyFlags flags = KeyFlag_None;
+		if (current_state & STATE_BREAK) {
+			keystates[key] = false;
+			flags |= KeyFlag_Released;
+		} else {
+			keystates[key] = true;
+		}
+		if (keystates[Key_LCtrl] || keystates[Key_RCtrl])
+			flags |= KeyFlag_Control;
+		if (keystates[Key_LShift] || keystates[Key_RShift])
+			flags |= KeyFlag_Shift;
+		if (keystates[Key_LAlt] || keystates[Key_RAlt])
+			flags |= KeyFlag_Alt;
+
+		char codepoint = '\0';
+		if (flags & KeyFlag_Shift) {
+			if (key < sizeof(shifted_map) && shifted_map[key] != 0)
+				codepoint = shifted_map[key];
+		} else {
+			if (key < sizeof(codepoint_map) && codepoint_map[key] != 0)
+				codepoint = codepoint_map[key];
+		}
+
+		rbuf[rbuf_widx++] = (keystroke_t){
+			.code = key,
+			.flags = flags,
+			.codepoint = codepoint,
+		};
+
 		current_state = STATE_NORMAL;
 	}
 
 	return frame;
 }
 
-static int kbd_read(void) {
+keystroke_t kbd_read(void) {
 	if (rbuf_widx == rbuf_ridx)
-		return -1;
+		return (keystroke_t){0xff};
 	return rbuf[rbuf_ridx++];
+}
+
+bool kbd_is_down(uint8_t key) {
+	return keystates[key];
 }
 
 static void kbd_write(char c) {
