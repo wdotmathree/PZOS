@@ -48,17 +48,19 @@ void *memmove(void *dst, const void *src, size_t n) {
 
 	char *d = dst;
 	const char *s = src;
-	const char *lasts = s + (n - 8);
-	char *lastd = d + (n - 8);
+	const char *lasts = s + n - 1;
+	char *lastd = d + n - 1;
 	int rem = n % 8;
 	n -= rem;
 	while (rem--)
-		*d++ = *s++;
+		*lastd-- = *lasts--;
+	lastd -= 7;
+	lasts -= 7;
 	while (n >= 8) {
 		*(size_t *)lastd = *(size_t *)lasts;
-		n -= 8;
 		lastd -= 8;
 		lasts -= 8;
+		n -= 8;
 	}
 	return dst;
 }
