@@ -42,12 +42,6 @@ isr_frame_t *calibrate_tsc(isr_frame_t *const frame) {
 		tsc_freq = elapsed * 18.206507364908855; // Approximate frequency of the PIT
 		_get_time = get_time_tsc;
 		LOG("TSC", "Detected CPU frequency: %llu MHz", tsc_freq / 1000000);
-
-		// Cleanup
-		uint8_t mask = inb(0x21);
-		mask |= (1 << 0); // Mask the PIT timer interrupt
-		outb(0x21, mask);
-		unregister_isr(32);
 	}
 	outb(0x20, 0x20); // Send EOI
 
@@ -100,6 +94,12 @@ void time_init(void) {
 		mask &= ~(1 << 0);
 		outb(0x21, mask);
 		asm volatile("hlt\n\thlt");
+
+		// Cleanup
+		mask = inb(0x21);
+		mask |= (1 << 0); // Mask the PIT timer interrupt
+		outb(0x21, mask);
+		unregister_isr(32);
 	}
 
 	/// TODO: Initialize system time and set up timer interrupts
