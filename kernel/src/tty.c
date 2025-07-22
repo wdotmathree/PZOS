@@ -178,7 +178,7 @@ static int parseescape(const char *s) {
 		return 0; // Not an escape sequence
 	}
 	int args[16] = {};
-	int arg_count = 0;
+	int arg_count = -1;
 	char cmd;
 	while (true) {
 		char c = s[i++];
@@ -191,6 +191,8 @@ static int parseescape(const char *s) {
 			escapebuf_active = true;
 			return escapebuf_len;
 		case '0' ... '9':
+			if (arg_count == -1)
+				arg_count = 0;
 			args[arg_count] = args[arg_count] * 10 + (c - '0');
 			continue;
 		case ';':
@@ -209,7 +211,42 @@ static int parseescape(const char *s) {
 	escapebuf_active = false;
 	escapebuf_len = 0;
 
-	if (cmd == 'm') {
+	switch (cmd) {
+	case 'C': { // Cursor forward
+		int num = 1;
+		if (arg_count > 0)
+			num = args[0];
+		if (tty_col + num >= tty_width) {
+			tty_col = tty_width - 1;
+		} else {
+			tty_col += num;
+		}
+		break;
+	}
+	case 'D': { // Cursor backward
+		int num = 1;
+		if (arg_count > 0)
+			num = args[0];
+		if (tty_col < num) {
+			tty_col = 0;
+		} else {
+			tty_col -= num;
+		}
+		break;
+	}
+	case 'G': { // Cursor horizontal absolute
+		int col = 0;
+		if (arg_count > 0)
+			col = args[0] - 1;
+		if (col >= tty_width)
+			col = tty_width - 1;
+		tty_col = col;
+		break;
+	}
+	case 'K': // Clear line
+		tty_clearline(tty_row);
+		break;
+	case 'm': { // Select graphic rendition
 		int n;
 		for (int j = 0; j < arg_count; j++) {
 			switch (args[j]) {
@@ -270,6 +307,7 @@ static int parseescape(const char *s) {
 				break;
 			}
 		}
+	}
 	}
 	return i;
 }
@@ -336,6 +374,7 @@ void tty_putchar(char c) {
 			escapebuf_len = 0;
 			return;
 		}
+		tty_drawcursor();
 		return;
 	}
 
