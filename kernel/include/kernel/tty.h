@@ -5,7 +5,12 @@
 #include <limine.h>
 #include <stddef.h>
 
-void tty_init(const struct limine_framebuffer *framebuffer);
+typedef struct {
+	size_t width;
+	size_t height;
+} tty_dim_t;
+
+tty_dim_t tty_init(const struct limine_framebuffer *framebuffer);
 void tty_clear(void);
 void tty_putchar(char c);
 void tty_write(const char *data, size_t size);

@@ -35,7 +35,7 @@ static size_t cur_x = -1;
 static size_t cur_y = -1;
 static void tty_drawcursor(void) {
 	// Delete the old cursor
-	if (cur_x != -1 && cur_y != -1) {
+	if (cur_x != (size_t)-1 && cur_y != (size_t)-1) {
 		size_t idx = buf_pitch * cur_y * GLYPH_HEIGHT + 4 * cur_x * GLYPH_WIDTH;
 		for (int i = 0; i < GLYPH_HEIGHT; i++) {
 			memcpy(tty_buf + idx, backbuf + idx, GLYPH_WIDTH * 4);
@@ -78,7 +78,7 @@ static void init_ansicolors(void) {
 	}
 }
 
-void tty_init(const struct limine_framebuffer *framebuffer) {
+tty_dim_t tty_init(const struct limine_framebuffer *framebuffer) {
 	init_ansicolors();
 	tty_buf = framebuffer->address;
 	buf_width = framebuffer->width;
@@ -88,6 +88,8 @@ void tty_init(const struct limine_framebuffer *framebuffer) {
 	tty_height = framebuffer->height / GLYPH_HEIGHT;
 	tty_color = color_pair(ANSI_3BIT_COLORS[ANSI_COLOR_WHITE], ANSI_3BIT_COLORS[ANSI_COLOR_BLACK]);
 	tty_drawcursor();
+
+	return (tty_dim_t){.width = tty_width, .height = tty_height};
 }
 
 void tty_clear(void) {
@@ -216,10 +218,15 @@ static int parseescape(const char *s) {
 		int num = 1;
 		if (arg_count > 0)
 			num = args[0];
-		if (tty_col + num >= tty_width) {
-			tty_col = tty_width - 1;
-		} else {
-			tty_col += num;
+		tty_col += num;
+		while (tty_col >= tty_width) {
+			tty_col -= tty_width;
+			if (tty_row == tty_height - 1) {
+				tty_col = tty_width - 1;
+				break;
+			} else {
+				tty_row++;
+			}
 		}
 		break;
 	}
@@ -227,11 +234,35 @@ static int parseescape(const char *s) {
 		int num = 1;
 		if (arg_count > 0)
 			num = args[0];
-		if (tty_col < num) {
-			tty_col = 0;
-		} else {
-			tty_col -= num;
+		while ((int)tty_col < num) {
+			num -= tty_width;
+			if (tty_row == 0) {
+				tty_col = 0;
+				break;
+			} else {
+				tty_row--;
+			}
 		}
+		tty_col -= num;
+		break;
+	}
+	case 'E': {
+		int num = 1;
+		if (arg_count > 0)
+			num = args[0];
+		tty_row += num;
+		if (tty_row >= tty_height)
+			tty_row = tty_height - 1;
+		break;
+	}
+	case 'F': {
+		int num = 1;
+		if (arg_count > 0)
+			num = args[0];
+		if (tty_row < num)
+			tty_row = 0;
+		else
+			tty_row -= num;
 		break;
 	}
 	case 'G': { // Cursor horizontal absolute

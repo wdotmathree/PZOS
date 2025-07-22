@@ -52,7 +52,7 @@ static volatile LIMINE_REQUESTS_END_MARKER;
 
 extern void _kernel_end;
 
-__attribute__((noreturn)) void kmain(void);
+__attribute__((noreturn)) void kmain(tty_dim_t);
 
 void test(int a) {
 	if (a == 0)
@@ -111,7 +111,7 @@ __attribute__((naked, noreturn)) void kinit(void) {
 
 	isr_init();
 
-	tty_init(framebuffer_request.response->framebuffers[0]);
+	tty_dim_t tty_size = tty_init(framebuffer_request.response->framebuffers[0]);
 	serial_init();
 
 	time_init();
@@ -130,5 +130,5 @@ __attribute__((naked, noreturn)) void kinit(void) {
 
 	kbd_init();
 
-	kmain();
+	kmain(tty_size);
 }
