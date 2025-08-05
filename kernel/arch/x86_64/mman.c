@@ -47,7 +47,6 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		struct limine_memmap_entry *entry = mmap->entries[i];
 		LOG("MMAN", "base=%p size=%p type=%s", entry->base, entry->length, MEM_TYPES[entry->type]);
 		if (entry->type == LIMINE_MEMMAP_USABLE || entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
-			max_addr = entry->base + entry->length - 1;
 			mem_size += entry->length;
 		} else if (entry->type == LIMINE_MEMMAP_FRAMEBUFFER) {
 			// We only use the first framebuffer
@@ -56,8 +55,9 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 				framebuf_size = entry->length;
 			}
 		}
+		max_addr = entry->base + entry->length - 1;
 	}
-	LOG("MMAN", "Maximum usable byte at %p", max_addr);
+	LOG("MMAN", "Maximum addressable byte at %p", max_addr);
 	LOG("MMAN", "Usable memory size: %zu bytes (%zu pages)", mem_size, mem_size / 0x1000);
 
 	// Find candidates for low memory bitmap and high memory page stack
