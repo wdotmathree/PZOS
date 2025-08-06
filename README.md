@@ -39,7 +39,7 @@ sudo apt install ovmf
 4. Run the image with QEMU
 ```bash
 # 4GB RAM max memory size (not allocated at boot), adjust as needed
-# If using UEFI
+# If using UEFI (PS/2 is not supported by the UEFI firmware so keyboard won't work)
 qemu-system-x86_64 -m 4G -drive format=raw,file=PZOS.bin -bios /usr/share/OVMF/OVMF_CODE.fd
 
 # If using legacy BIOS
