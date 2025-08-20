@@ -26,7 +26,7 @@ install:
 
 	mkdir -p $(MOUNTPOINT)
 
-	sudo mount $(file)1 $(MOUNTPOINT)
+	sudo mount $(file)1 $(MOUNTPOINT) -o umask=000
 	mkdir -p $(MOUNTPOINT)/boot/limine
 	mkdir -p $(MOUNTPOINT)/EFI/BOOT
 	sudo cp kernel/kernel.elf $(MOUNTPOINT)/boot/PZOS.bin
@@ -37,7 +37,7 @@ install:
 	sudo cp bg.jpg $(MOUNTPOINT)/boot/limine
 	sudo umount -l $(MOUNTPOINT)
 
-	sudo mount $(file)2 $(MOUNTPOINT)
+	sudo mount $(file)2 $(MOUNTPOINT) -o umask=000
 	@# Copy files from sysroot
 	sudo umount -l $(MOUNTPOINT)
 
