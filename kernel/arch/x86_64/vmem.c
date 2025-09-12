@@ -142,7 +142,7 @@ void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 	vma_list_t *prev = vma_list;
 	vma_list_t *curr = vma_list->next; // Guaranteed to exist since we always have at least 4 mappings
 	while (curr) {
-		if (prev->base >= start) {
+		if (prev->base + prev->size >= start) {
 			if (prev->base + prev->size + npages * PAGE_SIZE <= curr->base) {
 				// Found a gap
 				void *free_addr = (void *)(prev->base + prev->size);
