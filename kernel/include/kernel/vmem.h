@@ -19,6 +19,8 @@
 #ifndef KERNEL_VMEM_H
 #define KERNEL_VMEM_H
 
+#include <kernel/paging.h>
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -59,5 +61,9 @@ void destroy_vma(vma_list_t *vma);
 // Allocates `npages` pages of virtual memory, initially not backed by anything
 void *vmalloc(size_t npages, uint64_t flags);
 void *vmalloc_at(void *base, void *limit, size_t npages, uint64_t flags);
+
+// Frees the vmalloc'd memory at the page referenced by `addr`
+// It all `n` pages must belong to the same VMA
+void vfree(void *addr, size_t npages);
 
 #endif

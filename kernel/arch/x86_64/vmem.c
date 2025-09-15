@@ -180,3 +180,45 @@ void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 void *vmalloc(size_t npages, uint64_t flags) {
 	return vmalloc_at((void *)VMEM_VIRT_BASE, (void *)VMEM_VIRT_END, npages, flags);
 }
+
+void vfree(void *addr, size_t npages) {
+	// Go to beginning of page
+	addr = (void *)((uintptr_t)addr & ~(PAGE_SIZE - 1));
+
+	// Find the VMA that contains the address
+	vma_list_t *prev = vma_list;
+	vma_list_t *curr = vma_list->next;
+	while (curr) {
+		if (curr->base > addr)
+			break;
+		prev = curr;
+		curr = curr->next;
+	}
+
+	// Check if we actually found one or just didn't match anything
+	if (prev->base <= addr) {
+		if (addr + npages * PAGE_SIZE > prev->base + prev->size) // We cannot overflow into another VMA
+			panic("vfree: Invalid free size");
+		if (addr == prev->base && npages * PAGE_SIZE == prev->size) {
+			// Delete the whole VMA
+			destroy_vma(prev);
+		} else if (addr == prev->base) {
+			// Shrink from the start
+			prev->base = (void *)((uintptr_t)prev->base + npages * PAGE_SIZE);
+		} else if (addr + npages * PAGE_SIZE == prev->base + prev->size) {
+			// Shrink from the end
+			prev->size -= npages * PAGE_SIZE;
+		} else {
+			// Split into two VMAs
+			prev->size = addr - prev->base;
+			vma_list_t *new_vma = alloc_vma();
+			new_vma->base = addr + npages * PAGE_SIZE;
+			new_vma->size = (prev->base + prev->size) - new_vma->base;
+			new_vma->next = prev->next;
+			new_vma->prev = prev;
+			prev->next = new_vma;
+		}
+	} else {
+		panic("vfree: Invalid free address");
+	}
+}
