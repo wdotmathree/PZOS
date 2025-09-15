@@ -61,13 +61,13 @@ void unmap_page(const void *virt_addr) {
 	uint64_t *pml4e = (uint64_t *)LINADDR_PML4E_PTR(virt);
 	if ((*pml4e & PAGE_PRESENT) == 0)
 		goto unmapped;
-	uint64_t *pdpte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pml4e));
+	uint64_t *pdpte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pml4e)) + LINADDR_PDPTE(virt);
 	if ((*pdpte & PAGE_PRESENT) == 0)
 		goto unmapped;
-	uint64_t *pde = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pdpte));
+	uint64_t *pde = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pdpte)) + LINADDR_PDE(virt);
 	if ((*pde & PAGE_PRESENT) == 0)
 		goto unmapped;
-	uint64_t *pte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pde));
+	uint64_t *pte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTE(virt);
 	if ((*pte & PAGE_PRESENT) == 0)
 		goto unmapped;
 
