@@ -93,8 +93,8 @@ tty_dim_t tty_init(const struct limine_framebuffer *framebuffer) {
 }
 
 void tty_clear(void) {
-	memset(tty_buf, 0, buf_pitch * buf_height * 4);
-	memset(backbuf, 0, buf_pitch * buf_height * 4);
+	memset(tty_buf, 0, buf_pitch * buf_height);
+	memset(backbuf, 0, buf_pitch * buf_height);
 	memset(used, 0, tty_height * sizeof(uint32_t));
 	tty_row = 0;
 	tty_col = 0;
