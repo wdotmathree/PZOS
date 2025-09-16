@@ -12,13 +12,13 @@ typedef struct {
 	uint8_t start_bus_number;
 	uint8_t end_bus_number;
 	char _reserved[4];
-} ACPI_MCFG_ENTRY;
+} __attribute__((packed)) ACPI_MCFG_ENTRY;
 
 typedef struct {
 	ACPI_TABLE_HEADER Header;
 	char _reserved[8];
 	ACPI_MCFG_ENTRY entries[];
-} ACPI_MCFG;
+} __attribute__((packed)) ACPI_MCFG;
 
 void pci_init(void);
 
