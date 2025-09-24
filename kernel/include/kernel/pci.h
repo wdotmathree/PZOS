@@ -20,6 +20,32 @@ typedef struct {
 	ACPI_MCFG_ENTRY entries[];
 } __attribute__((packed)) ACPI_MCFG;
 
+typedef struct {
+	uint16_t vendor_id;
+	uint16_t device_id;
+	uint8_t class_code;
+	uint8_t subclass;
+	uint8_t prog_if;
+	uint8_t revision_id;
+	uint8_t header_type;
+} __attribute__((packed)) pci_header_t;
+
+typedef struct pci_dev {
+	struct pci_dev *next;
+	uint8_t bus;
+	uint8_t device;
+	uint8_t function;
+	pci_header_t header;
+} pci_dev_t;
+
+typedef struct pci_bus {
+	struct pci_bus *parent;
+	struct pci_bus *children;
+	struct pci_bus *next;
+	pci_dev_t *devices;
+	uint8_t bus;
+} pci_bus_t;
+
 void pci_init(void);
 
 #endif
