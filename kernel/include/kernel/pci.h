@@ -49,6 +49,9 @@ typedef struct pci_bus_t {
 	uint8_t bus;
 } pci_bus_t;
 
+extern uint32_t (*pci_cfg_read)(int bus, int dev, int func, size_t offset);
+extern void (*pci_cfg_write)(int bus, int dev, int func, size_t offset, uint64_t data, size_t size);
+
 void pci_init(void);
 
 #endif

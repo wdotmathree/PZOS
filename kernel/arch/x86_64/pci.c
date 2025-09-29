@@ -5,7 +5,6 @@
 #include <kernel/kmalloc.h>
 #include <kernel/log.h>
 #include <kernel/panic.h>
-#include <kernel/vmem.h>
 
 #include <string.h>
 
@@ -19,20 +18,9 @@ static uintptr_t mmio_bases[65536];
 static pci_bus_t *pci_tree = NULL;
 static pci_dev_t *pci_devices = NULL;
 
-static uint64_t pci_cfg_read_mmio(int bus, int dev, int func, size_t offset, size_t size) {
+static uint32_t pci_cfg_read_mmio(int bus, int dev, int func, size_t offset) {
 	uintptr_t addr = CONFIG_ADDR(bus, dev, func) + offset;
-	uint64_t data = 0;
-	if (size == 1)
-		data = *(volatile uint8_t *)(addr);
-	else if (size == 2)
-		data = *(volatile uint16_t *)(addr);
-	else if (size == 4)
-		data = *(volatile uint32_t *)(addr);
-	else if (size == 8)
-		data = *(volatile uint64_t *)(addr);
-	else
-		data = -1;
-	return data;
+	return *(volatile uint32_t *)(addr);
 }
 
 static void pci_cfg_write_mmio(int bus, int dev, int func, size_t offset, uint64_t data, size_t size) {
@@ -41,15 +29,16 @@ static void pci_cfg_write_mmio(int bus, int dev, int func, size_t offset, uint64
 		*(volatile uint8_t *)(addr) = data;
 	else if (size == 2)
 		*(volatile uint16_t *)(addr) = data;
-	else if (size == 4)
+	else if (size == 4) [[likely]]
 		*(volatile uint32_t *)(addr) = data;
-	else if (size == 8)
-		*(volatile uint64_t *)(addr) = data;
 	else
 		panic("Unsupported PCI config write size", "a");
 }
 
-uint64_t (*pci_cfg_read)(int bus, int dev, int func, size_t offset, size_t size) = pci_cfg_read_mmio;
+/// TODO: Implement PIO access method
+
+uint32_t (*pci_cfg_read)(int bus, int dev, int func, size_t offset) = pci_cfg_read_mmio;
+void (*pci_cfg_write)(int bus, int dev, int func, size_t offset, uint64_t data, size_t size) = pci_cfg_write_mmio;
 
 static pci_dev_t *pci_add_device(int seg_group, pci_bus_t *bus, int dev, int func) {
 	pci_dev_t *new_dev = kmalloc(sizeof(pci_dev_t));
