@@ -30,18 +30,21 @@ typedef struct {
 	uint8_t header_type;
 } __attribute__((packed)) pci_header_t;
 
-typedef struct pci_dev {
-	struct pci_dev *next;
+typedef struct pci_dev_t {
+	struct pci_dev_t *sibling;
+	struct pci_dev_t *next;
+	uint16_t seg_group;
 	uint8_t bus;
 	uint8_t device;
 	uint8_t function;
-	pci_header_t header;
+	// pci_header_t *header;
 } pci_dev_t;
 
-typedef struct pci_bus {
-	struct pci_bus *parent;
-	struct pci_bus *children;
-	struct pci_bus *next;
+typedef struct pci_bus_t {
+	struct pci_bus_t *parent;
+	struct pci_bus_t *children;
+	struct pci_bus_t *next;
+	struct pci_dev_t *bridge;
 	pci_dev_t *devices;
 	uint8_t bus;
 } pci_bus_t;
