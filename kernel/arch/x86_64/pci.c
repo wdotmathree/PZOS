@@ -55,8 +55,8 @@ static pci_dev_t *pci_add_device(int seg_group, pci_bus_t *bus, int dev, int fun
 	return new_dev;
 }
 
-static void pci_enumerate_bus(int seg_group, int bus, uintptr_t base_addr, pci_bus_t *bus_ptr);
-static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t mmio_base, pci_bus_t *bus_ptr) {
+static void pci_enumerate_bus(int seg_group, int bus, uintptr_t base_addr, pci_bus_t *bus_ptr, int depth);
+static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t mmio_base, pci_bus_t *bus_ptr, int depth) {
 	void *cfg_addr = (void *)(mmio_base + ((dev << 15) | (func << 12)));
 
 	uint16_t vendor_id = *(uint16_t *)(cfg_addr + 0x00);
@@ -66,7 +66,10 @@ static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t 
 	uint16_t device_id = *(uint16_t *)(cfg_addr + 0x02);
 	uint8_t header_type = *(uint8_t *)(cfg_addr + 0x0e);
 	uint32_t class = *(uint32_t *)(cfg_addr + 0x08);
-	LOG("PCI", "%04x:%02x:%02x.%d: [%04x:%04x] type %02x class 0x%06x", seg_group, bus, dev, func, vendor_id, device_id, header_type & 0x7f, class >> 8);
+	LOGn("PCI", " ");
+	for (int i = 0; i < depth; i++)
+		printf("|  ");
+	printf("+-%02x:%02x.%d: [%04x:%04x] type %02x class 0x%06x\n", bus, dev, func, vendor_id, device_id, header_type & 0x7f, class >> 8);
 
 	pci_dev_t *new_dev = pci_add_device(seg_group, bus_ptr, dev, func);
 
@@ -77,8 +80,6 @@ static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t 
 		if (sec_mmio_base == 0) {
 			LOG("PCI", "Warning: Secondary bus %u has no MMIO base, skipping", secondary_bus);
 		} else {
-			LOG("PCI", "Found PCI-to-PCI bridge to bus %u", secondary_bus);
-
 			pci_bus_t *new_bus = kmalloc(sizeof(pci_bus_t));
 			*new_bus = (pci_bus_t){
 				.parent = bus_ptr,
@@ -90,7 +91,7 @@ static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t 
 			};
 			bus_ptr->children = new_bus;
 
-			pci_enumerate_bus(seg_group, secondary_bus, sec_mmio_base, new_bus);
+			pci_enumerate_bus(seg_group, secondary_bus, sec_mmio_base, new_bus, depth + 1);
 		}
 	}
 
@@ -98,16 +99,16 @@ static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t 
 	if (func == 0 && header_type & 0x80) {
 		// Enumerate other functions
 		for (int fun = 1; fun < 8; fun++) {
-			if (!pci_check_func(seg_group, bus, dev, fun, mmio_base, bus_ptr))
+			if (!pci_check_func(seg_group, bus, dev, fun, mmio_base, bus_ptr, depth))
 				continue;
 		}
 	}
 	return true;
 }
 
-static void pci_enumerate_bus(int seg_group, int bus, uintptr_t mmio_base, pci_bus_t *bus_ptr) {
+static void pci_enumerate_bus(int seg_group, int bus, uintptr_t mmio_base, pci_bus_t *bus_ptr, int depth) {
 	for (int dev = 0; dev < 32; dev++) {
-		if (!pci_check_func(seg_group, bus, dev, 0, mmio_base, bus_ptr))
+		if (!pci_check_func(seg_group, bus, dev, 0, mmio_base, bus_ptr, depth))
 			continue;
 	}
 }
@@ -141,7 +142,7 @@ void pci_init(void) {
 				mmio_bases[bus] = entry->base_address + ((uintptr_t)bus << 20) + hhdm_off;
 
 			// Begin recursive enumeration
-			pci_enumerate_bus(seg_group, entry->start_bus_number, mmio_bases[entry->start_bus_number], pci_tree);
+			pci_enumerate_bus(seg_group, entry->start_bus_number, mmio_bases[entry->start_bus_number], pci_tree, 0);
 		}
 	}
 
