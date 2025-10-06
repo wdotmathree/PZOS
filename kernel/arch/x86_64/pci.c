@@ -18,29 +18,9 @@ static uintptr_t mmio_bases[65536];
 static pci_bus_t *pci_tree = NULL;
 static pci_dev_t *pci_devices = NULL;
 
-static uint32_t pci_cfg_read_mmio(int bus, int dev, int func, size_t offset) {
-	uintptr_t addr = CONFIG_ADDR(bus, dev, func) + offset;
-	return *(volatile uint32_t *)(addr);
-}
+static pci_driver_t *pci_drivers = NULL;
 
-static void pci_cfg_write_mmio(int bus, int dev, int func, size_t offset, uint64_t data, size_t size) {
-	uintptr_t addr = CONFIG_ADDR(bus, dev, func) + offset;
-	if (size == 1)
-		*(volatile uint8_t *)(addr) = data;
-	else if (size == 2)
-		*(volatile uint16_t *)(addr) = data;
-	else if (size == 4) [[likely]]
-		*(volatile uint32_t *)(addr) = data;
-	else
-		panic("Unsupported PCI config write size", "a");
-}
-
-/// TODO: Implement PIO access method
-
-uint32_t (*pci_cfg_read)(int bus, int dev, int func, size_t offset) = pci_cfg_read_mmio;
-void (*pci_cfg_write)(int bus, int dev, int func, size_t offset, uint64_t data, size_t size) = pci_cfg_write_mmio;
-
-static pci_dev_t *pci_add_device(int seg_group, pci_bus_t *bus, int dev, int func) {
+static pci_dev_t *pci_add_device(int seg_group, pci_bus_t *bus, int dev, int func, void *cfg_addr) {
 	pci_dev_t *new_dev = kmalloc(sizeof(pci_dev_t));
 	*new_dev = (pci_dev_t){
 		.next = pci_devices,
@@ -48,6 +28,7 @@ static pci_dev_t *pci_add_device(int seg_group, pci_bus_t *bus, int dev, int fun
 		.bus = bus->bus,
 		.device = dev,
 		.function = func,
+		.header = (pci_header_t *)cfg_addr,
 	};
 	pci_devices = new_dev;
 	bus->devices = new_dev;
@@ -71,7 +52,7 @@ static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t 
 		printf("|  ");
 	printf("+-%02x:%02x.%d: [%04x:%04x] type %02x class 0x%06x\n", bus, dev, func, vendor_id, device_id, header_type & 0x7f, class >> 8);
 
-	pci_dev_t *new_dev = pci_add_device(seg_group, bus_ptr, dev, func);
+	pci_dev_t *new_dev = pci_add_device(seg_group, bus_ptr, dev, func, cfg_addr);
 
 	if ((header_type & 0x7f) == 1) {
 		// PCI-to-PCI bridge
@@ -113,6 +94,33 @@ static void pci_enumerate_bus(int seg_group, int bus, uintptr_t mmio_base, pci_b
 	}
 }
 
+bool pci_register_driver(pci_driver_t *driver) {
+	if (driver == NULL || driver->init == NULL)
+		return false;
+
+	driver->next = pci_drivers;
+	pci_drivers = driver;
+
+	// Look through existing devices
+	pci_dev_t *dev = pci_devices;
+	while (dev) {
+		if (dev->driver)
+			goto next;
+
+		pci_header_t *header = dev->header;
+		if (driver->vendor_id != PCI_ID_ANY && driver->vendor_id != header->vendor_id)
+			goto next;
+		if (driver->device_id != PCI_ID_ANY && driver->device_id != header->device_id)
+			goto next;
+		if (driver->class_mask != 0 && (driver->class_code & driver->class_mask) != (*(uint32_t *)&header->prog_if & driver->class_mask))
+			goto next;
+		if (driver->init(dev))
+			dev->driver = driver;
+	next:
+		dev = dev->next;
+	}
+}
+
 void pci_init(void) {
 	ACPI_MCFG *table = acpi_get_table(ACPI_SIG("MCFG"));
 
@@ -128,7 +136,7 @@ void pci_init(void) {
 	memset(mmio_bases, 0, sizeof(mmio_bases));
 	if (table == NULL) {
 		LOG("PCI", "No MCFG table found, skipping PCI initialization");
-		/// TODO: Implement legacy PIO access method
+		/// TODO: Implement legacy PIO access method (potentially using memory mapped I/O)
 	} else {
 		num_segment_groups = (table->Header.Length - sizeof(ACPI_TABLE_HEADER) - 8) / sizeof(ACPI_MCFG_ENTRY);
 

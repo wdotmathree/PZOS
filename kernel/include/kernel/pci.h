@@ -2,9 +2,12 @@
 #ifndef KERNEL_PCI_H
 #define KERNEL_PCI_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <kernel/acpi.h>
+
+#define PCI_ID_ANY (-1)
 
 typedef struct {
 	uintptr_t base_address;
@@ -23,12 +26,37 @@ typedef struct {
 typedef struct {
 	uint16_t vendor_id;
 	uint16_t device_id;
-	uint8_t class_code;
-	uint8_t subclass;
-	uint8_t prog_if;
+	uint16_t command;
+	uint16_t status;
 	uint8_t revision_id;
+	uint8_t prog_if;
+	uint8_t subclass;
+	uint8_t class_code;
+	uint8_t cl_size;
+	uint8_t latency_timer;
 	uint8_t header_type;
+	uint8_t bist;
 } __attribute__((packed)) pci_header_t;
+
+typedef struct {
+	pci_header_t common;
+	uint32_t bar0;
+	uint32_t bar1;
+	uint32_t bar2;
+	uint32_t bar3;
+	uint32_t bar4;
+	uint32_t bar5;
+	uint32_t cis_pointer;
+	uint16_t sub_vendor_id;
+	uint16_t sub_id;
+	uint32_t rom_base_addr;
+	uint8_t cap_ptr;
+	uint8_t _reserved[7];
+	uint8_t irq_line;
+	uint8_t irq_pin;
+	uint8_t min_grant;
+	uint8_t max_latency;
+} __attribute__((packed)) pci_dev_header_t;
 
 typedef struct pci_dev_t {
 	struct pci_dev_t *sibling;
@@ -37,7 +65,8 @@ typedef struct pci_dev_t {
 	uint8_t bus;
 	uint8_t device;
 	uint8_t function;
-	// pci_header_t *header;
+	pci_header_t *header;
+	struct pci_driver_t *driver;
 } pci_dev_t;
 
 typedef struct pci_bus_t {
@@ -49,9 +78,15 @@ typedef struct pci_bus_t {
 	uint8_t bus;
 } pci_bus_t;
 
-extern uint32_t (*pci_cfg_read)(int bus, int dev, int func, size_t offset);
-extern void (*pci_cfg_write)(int bus, int dev, int func, size_t offset, uint64_t data, size_t size);
+typedef struct pci_driver_t {
+	struct pci_driver_t *next;
+	uint32_t class_code, class_mask;
+	uint32_t vendor_id, device_id;
+	bool (*init)(pci_dev_t *dev);
+} pci_driver_t;
 
 void pci_init(void);
+
+bool pci_register_driver(pci_driver_t *driver);
 
 #endif

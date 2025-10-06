@@ -5,7 +5,8 @@ export AR := /opt/cross/bin/x86_64-elf-ar
 export CC := /opt/cross/bin/x86_64-elf-gcc
 export ARCH := x86_64
 
-QEMU_FLAGS := -device pcie-root-port,port=0x8,chassis=1,id=pci.1 -device pcie-root-port,port=0x9,chassis=2,id=pci.2,bus=pci.1 -device e1000,bus=pci.1 -device qemu-xhci,id=xhci,bus=pci.2
+QEMU_FLAGS := -cpu max -m 5G -drive file=PZOS.bin,format=raw,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm
+QEMU_FLAGS += -device pcie-root-port,port=0x8,chassis=1,id=pci.1 -device pcie-root-port,port=0x9,chassis=2,id=pci.2,bus=pci.1 -device e1000,bus=pci.1 -device qemu-xhci,id=xhci,bus=pci.2
 
 img:
 	$(MAKE) -C limine
@@ -60,15 +61,15 @@ PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 	limine/limine bios-install PZOS.bin
 
 test: img
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -d unimp,guest_errors,int -D logfile -no-reboot # -bios /usr/share/qemu/OVMF.fd
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
-	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
+	# qemu-system-x86_64 -d unimp,guest_errors,int -D logfile -no-reboot # -bios /usr/share/qemu/OVMF.fd
+	# qemu-system-x86_64 -nographic -serial file:/dev/stdout -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
+	qemu-system-x86_64 -monitor stdio -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
 
 debug: TARGET := debug
 debug: img
 	# gdb -ex "target remote :1234" -se "kernel/kernel.elf"
-	qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -nographic -serial file:/dev/stdout -s -S -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
-	# qemu-system-x86_64 -cpu max -m 4G -drive file=PZOS.bin,format=raw -monitor stdio -s -S -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
+	qemu-system-x86_64 -nographic -serial file:/dev/stdout -s -S -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
+	# qemu-system-x86_64 -monitor stdio -s -S -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
 
 clean:
 	$(MAKE) -C kernel clean
