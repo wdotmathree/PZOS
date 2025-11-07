@@ -4,6 +4,7 @@
 
 #include <kernel/kmalloc.h>
 #include <kernel/log.h>
+#include <kernel/paging.h>
 #include <kernel/panic.h>
 
 #include <string.h>
@@ -39,6 +40,7 @@ static pci_dev_t *pci_add_device(int seg_group, pci_bus_t *bus, int dev, int fun
 static void pci_enumerate_bus(int seg_group, int bus, uintptr_t base_addr, pci_bus_t *bus_ptr, int depth);
 static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t mmio_base, pci_bus_t *bus_ptr, int depth) {
 	void *cfg_addr = (void *)(mmio_base + ((dev << 15) | (func << 12)));
+	map_page(cfg_addr, cfg_addr - hhdm_off, PAGE_NX | PAGE_RW | PAGE_TYPE(PAT_UC));
 
 	uint16_t vendor_id = *(uint16_t *)(cfg_addr + 0x00);
 	if (vendor_id == 0xffff)

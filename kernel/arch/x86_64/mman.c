@@ -190,52 +190,100 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		}
 	}
 
-	// Direct map
-	ptr = 0;
-	while (max_addr - ptr >= 0x40000000) {
-		if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
-			pdpt = (uint64_t *)(hhdm_off + alloc_page());
-			pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-			memset(pdpt, 0, 0x1000);
+	// Direct map USABLE and BOOTLOADER_RECLAIMABLE memory as WB
+	for (int i = 0; i < count; i++) {
+		struct limine_memmap_entry *entry = mmap->entries[i];
+		if (entry->type != LIMINE_MEMMAP_USABLE && entry->type != LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE)
+			continue;
+
+		uintptr_t end = entry->base + entry->length & -0x1000;
+		uintptr_t ptr = entry->base & -0x1000;
+
+		// Pad to 2MiB
+		while (ptr & 0x1fffff && end - ptr >= 0x1000) {
+			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
+				pdpt = (uint64_t *)(hhdm_off + alloc_page());
+				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pdpt, 0, 0x1000);
+			}
+			if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
+				pd = (uint64_t *)(hhdm_off + alloc_page());
+				pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pd, 0, 0x1000);
+			}
+			if (pd[LINADDR_PDE(ptr)] == 0) {
+				pt = (uint64_t *)(hhdm_off + alloc_page());
+				pd[LINADDR_PDE(ptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pt, 0, 0x1000);
+			}
+			pt[LINADDR_PTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+			ptr += 0x1000;
 		}
-		pdpt[LINADDR_PDPTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WC);
-		ptr += 0x40000000;
-	}
-	while (max_addr - ptr >= 0x200000) {
-		if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
-			pdpt = (uint64_t *)(hhdm_off + alloc_page());
-			pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-			memset(pdpt, 0, 0x1000);
+
+		// Pad to 1GiB
+		while (ptr & 0x3fffffff && end - ptr >= 0x200000) {
+			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
+				pdpt = (uint64_t *)(hhdm_off + alloc_page());
+				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pdpt, 0, 0x1000);
+			}
+			if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
+				pd = (uint64_t *)(hhdm_off + alloc_page());
+				pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pd, 0, 0x1000);
+			}
+			pd[LINADDR_PDE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WB);
+			ptr += 0x200000;
 		}
-		if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
-			pd = (uint64_t *)(hhdm_off + alloc_page());
-			pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-			memset(pd, 0, 0x1000);
+
+		// Map remaining pages
+		while (end - ptr >= 0x40000000) {
+			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
+				pdpt = (uint64_t *)(hhdm_off + alloc_page());
+				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pdpt, 0, 0x1000);
+			}
+			pdpt[LINADDR_PDPTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WB);
+			ptr += 0x40000000;
 		}
-		pd[LINADDR_PDE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WC);
-		ptr += 0x200000;
-	}
-	while (max_addr - ptr < 0x200000) { // Detect overflow
-		if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
-			pdpt = (uint64_t *)(hhdm_off + alloc_page());
-			pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-			memset(pdpt, 0, 0x1000);
+		while (end - ptr >= 0x200000) {
+			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
+				pdpt = (uint64_t *)(hhdm_off + alloc_page());
+				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pdpt, 0, 0x1000);
+			}
+			if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
+				pd = (uint64_t *)(hhdm_off + alloc_page());
+				pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pd, 0, 0x1000);
+			}
+			pd[LINADDR_PDE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WB);
+			ptr += 0x200000;
 		}
-		if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
-			pd = (uint64_t *)(hhdm_off + alloc_page());
-			pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-			memset(pd, 0, 0x1000);
+		while (end - ptr >= 0x1000) {
+			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
+				pdpt = (uint64_t *)(hhdm_off + alloc_page());
+				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pdpt, 0, 0x1000);
+			}
+			if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
+				pd = (uint64_t *)(hhdm_off + alloc_page());
+				pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pd, 0, 0x1000);
+			}
+			if (pd[LINADDR_PDE(ptr)] == 0) {
+				pt = (uint64_t *)(hhdm_off + alloc_page());
+				pd[LINADDR_PDE(ptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+				memset(pt, 0, 0x1000);
+			}
+			pt[LINADDR_PTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+			ptr += 0x1000;
 		}
-		if (pd[LINADDR_PDE(ptr)] == 0) {
-			pt = (uint64_t *)(hhdm_off + alloc_page());
-			pd[LINADDR_PDE(ptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-			memset(pt, 0, 0x1000);
-		}
-		pt[LINADDR_PTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WC);
-		ptr += 0x1000;
 	}
 
 	// Switch to our new page tables
+	extern uintptr_t tty_buf;
+	tty_buf = 0xfffff80000000000;
 	asm("add rsp, %0\n\t"
 		"add rbp, %0\n\t"
 		"mov cr3, %1" : : "g"(0xffffffff80000000 - stack_base),

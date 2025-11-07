@@ -59,6 +59,7 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 		if (rsdp != NULL)
 			LOG("ACPI", "RSDP found at %p", rsdp);
 	} else {
+		map_page((void *)(hhdm_off + (uintptr_t)system_table), system_table, PAGE_NX | PAGE_TYPE(PAT_UC));
 		system_table = (EFI_SYSTEM_TABLE *)(hhdm_off + (uintptr_t)system_table);
 
 		// Search for ACPI tables in the EFI system table
@@ -69,6 +70,7 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 			if (((uint64_t *)&tables[i].VendorGuid)[0] == search_term[0] &&
 				((uint64_t *)&tables[i].VendorGuid)[1] == search_term[1]) {
 				rsdp = (ACPI_RSDP *)(hhdm_off + (uintptr_t)tables[i].VendorTable);
+				map_page(rsdp, tables[i].VendorTable, PAGE_NX | PAGE_TYPE(PAT_UC));
 				if (calculate_checksum(rsdp, sizeof(ACPI_RSDP)) == 0 &&
 					calculate_checksum(rsdp, sizeof(ACPI_XSDP)) == 0)
 					break;
@@ -85,6 +87,7 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 	if (rsdp->Revision >= 2) {
 		ACPI_XSDP *xsdp = (ACPI_XSDP *)rsdp;
 		rsdt = (ACPI_TABLE_HEADER *)(hhdm_off + xsdp->XsdtAddress);
+		map_page(rsdt, (void *)xsdp->XsdtAddress, PAGE_NX | PAGE_TYPE(PAT_UC));
 	} else {
 		LOG("ACPI", "ACPI revisions below 2.0 are not supported.");
 		return;
@@ -95,6 +98,7 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 	uint32_t num_entries = (rsdt->Length - sizeof(ACPI_TABLE_HEADER)) / sizeof(uint64_t);
 	for (uint32_t i = 0; i < num_entries; i++) {
 		ACPI_TABLE_HEADER *table = (ACPI_TABLE_HEADER *)(hhdm_off + (uintptr_t)tables[i]);
+		map_page(table, (void *)tables[i], PAGE_NX | PAGE_TYPE(PAT_UC));
 		if (calculate_checksum(table, table->Length) == 0) {
 			LOG("ACPI", "%.4s %p v%02hhu %-6.6s %-8.8s", table->Signature, table, table->Revision, table->OEMID, table->OEMTableID);
 		} else {

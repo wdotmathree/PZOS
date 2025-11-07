@@ -61,7 +61,7 @@ PZOS.bin: Makefile kernel/kernel.elf limine/limine limine.conf bg.jpg
 	limine/limine bios-install PZOS.bin
 
 test: img
-	# qemu-system-x86_64 -d unimp,guest_errors,int -D logfile -no-reboot # -bios /usr/share/qemu/OVMF.fd
+	# qemu-system-x86_64 -d unimp,guest_errors,int -D logfile -no-reboot -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
 	# qemu-system-x86_64 -nographic -serial file:/dev/stdout -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
 	qemu-system-x86_64 -monitor stdio -machine q35 -bios /usr/share/qemu/OVMF.fd $(QEMU_FLAGS)
 
