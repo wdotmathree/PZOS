@@ -10,6 +10,7 @@
 #include <kernel/kmalloc.h>
 #include <kernel/log.h>
 #include <kernel/mman.h>
+#include <kernel/nvme.h>
 #include <kernel/panic.h>
 #include <kernel/pci.h>
 #include <kernel/serial.h>
@@ -126,7 +127,8 @@ __attribute__((naked, noreturn)) void kinit(void) {
 
 	acpi_init(efi_system_table_request.response ? (void *)efi_system_table_request.response->address : NULL);
 
-	pci_init(); // Currently just a stub
+	pci_init();
+	nvme_init();
 
 	kbd_init();
 

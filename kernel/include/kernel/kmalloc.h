@@ -4,6 +4,8 @@
 
 #include <stddef.h>
 
+#include <kernel/mman.h>
+
 void kmalloc_init(void);
 
 void *kmalloc(size_t size);

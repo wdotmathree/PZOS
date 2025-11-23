@@ -97,7 +97,7 @@ static void pci_enumerate_bus(int seg_group, int bus, uintptr_t mmio_base, pci_b
 }
 
 bool pci_register_driver(pci_driver_t *driver) {
-	if (driver == NULL || driver->init == NULL)
+	if (driver == NULL || driver->attach == NULL)
 		return false;
 
 	driver->next = pci_drivers;
@@ -116,7 +116,7 @@ bool pci_register_driver(pci_driver_t *driver) {
 			goto next;
 		if (driver->class_mask != 0 && (driver->class_code & driver->class_mask) != (*(uint32_t *)&header->prog_if & driver->class_mask))
 			goto next;
-		if (driver->init(dev))
+		if (driver->attach(dev))
 			dev->driver = driver;
 	next:
 		dev = dev->next;

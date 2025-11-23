@@ -9,6 +9,17 @@
 
 #define PCI_ID_ANY (-1)
 
+#define PCI_CMD_IO_SPACE 0x01
+#define PCI_CMD_MEM_SPACE 0x02
+#define PCI_CMD_BUS_MASTER 0x04
+#define PCI_CMD_SPECIAL_CYCLES 0x08
+#define PCI_CMD_MEM_WRITE_INVALIDATE 0x10
+#define PCI_CMD_VGA_PALETTE_SNOOP 0x20
+#define PCI_CMD_PARITY_ERROR_RESP 0x40
+#define PCI_CMD_SERR_ENABLE 0x100
+#define PCI_CMD_FAST_B2B_ENABLE 0x200
+#define PCI_CMD_INTERRUPT_DISABLE 0x400
+
 typedef struct {
 	uintptr_t base_address;
 	uint16_t segment_group_number;
@@ -82,7 +93,7 @@ typedef struct pci_driver_t {
 	struct pci_driver_t *next;
 	uint32_t class_code, class_mask;
 	uint32_t vendor_id, device_id;
-	bool (*init)(pci_dev_t *dev);
+	bool (*attach)(pci_dev_t *dev); // Returns true to claim device
 } pci_driver_t;
 
 void pci_init(void);
