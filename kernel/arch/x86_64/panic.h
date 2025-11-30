@@ -11,7 +11,8 @@
 #define panic(args...)                                \
 	do {                                              \
 		isr_frame_t *ptr;                             \
-		asm volatile("push rsp\n\t"                   \
+		asm volatile("cli\n\t"                        \
+					 "push rsp\n\t"                   \
 					 "pushfq\n\t"                     \
 					 "sub rsp, 0x20\n\t"              \
 					 "push rax\n\t"                   \

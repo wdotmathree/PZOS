@@ -35,7 +35,7 @@ bool nvme_attach(pci_dev_t *dev) {
 	// Map BAR0
 	uintptr_t mmio_base = (((uint64_t)header->bar1 << 32) | (header->bar0 & ~0x0f)) + hhdm_off;
 	map_page((void *)mmio_base, (void *)(mmio_base - hhdm_off), PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_UC));
-	LOG("NVME", "Found NVMe controller at %02x:%02x.%x, MMIO base: %p", dev->bus, dev->device, dev->function, mmio_base - hhdm_off);
+	LOG("NVMe", "Found NVMe controller at %02x:%02x.%x, MMIO base: %p", dev->bus, dev->device, dev->function, mmio_base - hhdm_off);
 
 	// Initialize NVMe controller
 	nvme_ctrl_t *ctrl = kmalloc(sizeof(nvme_ctrl_t));

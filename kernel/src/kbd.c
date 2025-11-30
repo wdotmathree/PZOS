@@ -2,6 +2,7 @@
 
 #include <kernel/log.h>
 #include <kernel/ps2.h>
+#include <kernel/spinlock.h>
 
 // clang-format off
 static uint8_t normal_map[] = {
@@ -77,12 +78,16 @@ typedef enum {
 static state_t current_state = STATE_NORMAL;
 static uint16_t prev = 0xffff;
 
+static spinlock_t kbd_lock = SPINLOCK_INITIALIZER;
+
 static isr_frame_t *kbd_isr(isr_frame_t *const frame) {
 	uint8_t scancode = ps2_read_data();
+	uint64_t prev_irq = spin_acquire_irqsave(&kbd_lock);
 
 	if (scancode == 0xfa) {
 		if (++wbuf_ridx != wbuf_widx)
 			ps2_send_kbd(wbuf[wbuf_ridx]);
+		spin_release_irqrestore(&kbd_lock, prev_irq);
 		return frame;
 	} else if (scancode == 0xfe) {
 		if (retry_cnt < 3) {
@@ -93,27 +98,38 @@ static isr_frame_t *kbd_isr(isr_frame_t *const frame) {
 			LOG("KBD", "Failed to send last byte after 3 attempts");
 			retry_cnt = 0;
 		}
+		spin_release_irqrestore(&kbd_lock, prev_irq);
 		return frame;
 	}
-	if (!active)
+	if (!active) {
+		spin_release_irqrestore(&kbd_lock, prev_irq);
 		return frame;
+	}
 
 	// Begin parsing scancode sequences
 	if (scancode == 0xe0) {
 		current_state |= STATE_EXTENDED;
+		spin_release_irqrestore(&kbd_lock, prev_irq);
+		return frame;
 	} else if (scancode == 0xf0) {
 		current_state |= STATE_BREAK;
+		spin_release_irqrestore(&kbd_lock, prev_irq);
+		return frame;
 	} else if (scancode == 0xe1) {
 		current_state |= STATE_TWOBYTE;
+		spin_release_irqrestore(&kbd_lock, prev_irq);
+		return frame;
 	} else {
 		uint8_t key = 0xff;
 
 		if ((current_state & STATE_EXTENDED) && (scancode == 0x12 || scancode == 0x7c) && !(current_state & STATE_DIGRAPH)) {
 			current_state |= STATE_DIGRAPH;
+			spin_release_irqrestore(&kbd_lock, prev_irq);
 			return frame;
 		} else if (current_state & STATE_TWOBYTE) {
 			if (prev == 0xffff) {
 				prev = scancode;
+				spin_release_irqrestore(&kbd_lock, prev_irq);
 				return frame;
 			}
 
@@ -162,25 +178,35 @@ static isr_frame_t *kbd_isr(isr_frame_t *const frame) {
 		};
 
 		current_state = STATE_NORMAL;
+		spin_release_irqrestore(&kbd_lock, prev_irq);
+		return frame;
 	}
-
-	return frame;
 }
 
 keystroke_t kbd_read(void) {
-	if (rbuf_widx == rbuf_ridx)
+	uint64_t flags = spin_acquire_irqsave(&kbd_lock);
+	if (rbuf_widx == rbuf_ridx) {
+		spin_release_irqrestore(&kbd_lock, flags);
 		return (keystroke_t){0xff};
-	return rbuf[rbuf_ridx++];
+	}
+	keystroke_t k = rbuf[rbuf_ridx++];
+	spin_release_irqrestore(&kbd_lock, flags);
+	return k;
 }
 
 bool kbd_is_down(uint8_t key) {
-	return keystates[key];
+	uint64_t flags = spin_acquire_irqsave(&kbd_lock);
+	bool v = keystates[key];
+	spin_release_irqrestore(&kbd_lock, flags);
+	return v;
 }
 
 static void kbd_write(char c) {
+	uint64_t flags = spin_acquire_irqsave(&kbd_lock);
 	wbuf[wbuf_widx] = c;
 	if (wbuf_widx++ == wbuf_ridx)
 		ps2_send_kbd(c);
+	spin_release_irqrestore(&kbd_lock, flags);
 }
 
 void kbd_init(void) {

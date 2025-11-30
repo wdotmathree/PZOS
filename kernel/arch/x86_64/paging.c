@@ -6,8 +6,11 @@
 #include <kernel/log.h>
 #include <kernel/mman.h>
 #include <kernel/panic.h>
+#include <kernel/spinlock.h>
 
 extern uintptr_t hhdm_off;
+
+static spinlock_t paging_lock = SPINLOCK_INITIALIZER;
 
 void map_page(const void *virt_addr, const void *phys_addr, uint64_t flags) {
 	uintptr_t phys = (uintptr_t)phys_addr & -0x1000LL;
@@ -19,6 +22,8 @@ void map_page(const void *virt_addr, const void *phys_addr, uint64_t flags) {
 	uint64_t *pdpte;
 	uint64_t *pde;
 	uint64_t *pte;
+
+	uint64_t prev_irq = spin_acquire_irqsave(&paging_lock);
 
 	if ((*pml4e & PAGE_PRESENT) == 0) {
 		uintptr_t addr = (uintptr_t)alloc_page();
@@ -45,52 +50,73 @@ void map_page(const void *virt_addr, const void *phys_addr, uint64_t flags) {
 	pte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTE(virt);
 
 	if ((*pte & PAGE_PRESENT)) {
-		if (TABLE_ENTRY_ADDR(*pte) == phys)
+		if (TABLE_ENTRY_ADDR(*pte) == phys) {
+			spin_release_irqrestore(&paging_lock, prev_irq);
 			return;
+		}
 		LOG(__FUNCTION__, "Remapping virtual address %p to %p (previously mapped to %p)", virt, phys, TABLE_ENTRY_ADDR(*pte));
 	} else {
 		*pde += 1ULL << 52;
 	}
 	invlpg(virt);
 	*pte = phys | PAGE_PRESENT | flags;
+
+	spin_release_irqrestore(&paging_lock, prev_irq);
 }
 
 void unmap_page(const void *virt_addr) {
 	uintptr_t virt = (uintptr_t)virt_addr & -0x1000LL;
 
+	uint64_t flags = spin_acquire_irqsave(&paging_lock);
+
 	uint64_t *pml4e = (uint64_t *)LINADDR_PML4E_PTR(virt);
-	if ((*pml4e & PAGE_PRESENT) == 0)
+	if ((*pml4e & PAGE_PRESENT) == 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		goto unmapped;
+	}
 	uint64_t *pdpte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pml4e)) + LINADDR_PDPTE(virt);
-	if ((*pdpte & PAGE_PRESENT) == 0)
+	if ((*pdpte & PAGE_PRESENT) == 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		goto unmapped;
+	}
 	uint64_t *pde = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pdpte)) + LINADDR_PDE(virt);
-	if ((*pde & PAGE_PRESENT) == 0)
+	if ((*pde & PAGE_PRESENT) == 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		goto unmapped;
+	}
 	uint64_t *pte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTE(virt);
-	if ((*pte & PAGE_PRESENT) == 0)
+	if ((*pte & PAGE_PRESENT) == 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		goto unmapped;
+	}
 
 	*pte = 0;
 	invlpg(virt);
 
-	if (((*pde -= (1ULL << 52)) & (0x1ffULL << 52)) != 0)
+	if (((*pde -= (1ULL << 52)) & (0x1ffULL << 52)) != 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		return;
+	}
 	free_page((void *)TABLE_ENTRY_ADDR(*pde));
 	*pde = 0;
 	invlpg(pte);
 
-	if (((*pdpte -= (1ULL << 52)) & (0x1ffULL << 52)) != 0)
+	if (((*pdpte -= (1ULL << 52)) & (0x1ffULL << 52)) != 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		return;
+	}
 	free_page((void *)TABLE_ENTRY_ADDR(*pdpte));
 	*pdpte = 0;
 	invlpg(pde);
 
-	if (((*pml4e -= (1ULL << 52)) & (0x1ffULL << 52)) != 0)
+	if (((*pml4e -= (1ULL << 52)) & (0x1ffULL << 52)) != 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		return;
+	}
 	free_page((void *)TABLE_ENTRY_ADDR(*pml4e));
 	*pml4e = 0;
 	invlpg(pdpte);
+	spin_release_irqrestore(&paging_lock, flags);
 	return;
 
 unmapped:
@@ -100,22 +126,35 @@ unmapped:
 bool is_mapped(const void *virt_addr) {
 	uintptr_t virt = (uintptr_t)virt_addr & -0x1000LL;
 
+	uint64_t flags = spin_acquire_irqsave(&paging_lock);
+
 	uint64_t *pml4e = (uint64_t *)LINADDR_PML4E_PTR(virt);
-	if ((*pml4e & PAGE_PRESENT) == 0)
+	if ((*pml4e & PAGE_PRESENT) == 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		return false;
+	}
 
 	uint64_t *pdpte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pml4e));
-	if ((*pdpte & PAGE_PRESENT) == 0)
+	if ((*pdpte & PAGE_PRESENT) == 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		return false;
-	if (*pdpte & PAGE_PS)
+	}
+	if (*pdpte & PAGE_PS) {
+		spin_release_irqrestore(&paging_lock, flags);
 		return true;
+	}
 
 	uint64_t *pde = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pdpte));
-	if ((*pde & PAGE_PRESENT) == 0)
+	if ((*pde & PAGE_PRESENT) == 0) {
+		spin_release_irqrestore(&paging_lock, flags);
 		return false;
-	if (*pde & PAGE_PS)
+	}
+	if (*pde & PAGE_PS) {
+		spin_release_irqrestore(&paging_lock, flags);
 		return true;
+	}
 
 	uint64_t *pte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pde));
+	spin_release_irqrestore(&paging_lock, flags);
 	return *pte & PAGE_PRESENT;
 }

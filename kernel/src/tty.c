@@ -9,6 +9,7 @@
 #include <kernel/ansi.h>
 #include <kernel/defines.h>
 #include <kernel/serial.h>
+#include <kernel/spinlock.h>
 
 INCBIN(GLYPHS, "glyphs.bin");
 
@@ -33,6 +34,13 @@ static size_t buf_pitch;
 
 static size_t cur_x = -1;
 static size_t cur_y = -1;
+
+static spinlock_t tty_lock = SPINLOCK_INITIALIZER;
+
+/* Forward declarations for locked helpers (caller must hold `tty_lock`). */
+static void tty_putchar_locked(char c);
+static void tty_write_locked(const char *data, size_t size);
+
 static void tty_drawcursor(void) {
 	// Delete the old cursor
 	if (cur_x != (size_t)-1 && cur_y != (size_t)-1) {
@@ -93,12 +101,16 @@ tty_dim_t tty_init(const struct limine_framebuffer *framebuffer) {
 }
 
 void tty_clear(void) {
+	uint64_t flags = spin_acquire_irqsave(&tty_lock);
+
 	memset(tty_buf, 0, buf_pitch * buf_height);
 	memset(backbuf, 0, buf_pitch * buf_height);
 	memset(used, 0, tty_height * sizeof(uint32_t));
 	tty_row = 0;
 	tty_col = 0;
 	tty_drawcursor();
+
+	spin_release_irqrestore(&tty_lock, flags);
 }
 
 static uint32_t mix(uint64_t color, uint8_t alpha) {
@@ -391,6 +403,13 @@ static int parsecontrol(const char *s) {
 }
 
 void tty_putchar(char c) {
+	uint64_t flags = spin_acquire_irqsave(&tty_lock);
+	tty_putchar_locked(c);
+	spin_release_irqrestore(&tty_lock, flags);
+}
+
+// Internal helper: caller must hold `tty_lock`.
+static void tty_putchar_locked(char c) {
 	serial_write(c);
 
 	if (escapebuf_active) {
@@ -399,9 +418,9 @@ void tty_putchar(char c) {
 			escapebuf[escapebuf_len] = '\0';
 			parseescape(escapebuf);
 		} else {
-			// Buffer overflow, flush and reset
+			// Buffer overflow, flush and reset using locked write
 			escapebuf_active = false;
-			tty_write(escapebuf, escapebuf_len);
+			tty_write_locked(escapebuf, escapebuf_len);
 			escapebuf_len = 0;
 			return;
 		}
@@ -427,9 +446,16 @@ void tty_putchar(char c) {
 }
 
 void tty_write(const char *data, size_t size) {
+	uint64_t flags = spin_acquire_irqsave(&tty_lock);
+	tty_write_locked(data, size);
+	spin_release_irqrestore(&tty_lock, flags);
+}
+
+// Internal helper: caller must hold `tty_lock`.
+static void tty_write_locked(const char *data, size_t size) {
 	for (size_t i = 0; i < size; i++) {
 		if (escapebuf_active) {
-			tty_putchar(data[i]);
+			tty_putchar_locked(data[i]);
 			continue;
 		}
 
@@ -439,7 +465,7 @@ void tty_write(const char *data, size_t size) {
 
 		if (i < size) {
 			if (off) {
-				tty_putchar(data[i]);
+				tty_putchar_locked(data[i]);
 				continue;
 			}
 

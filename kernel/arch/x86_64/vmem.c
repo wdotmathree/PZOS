@@ -8,9 +8,12 @@
 #include <kernel/mman.h>
 #include <kernel/paging.h>
 #include <kernel/panic.h>
+#include <kernel/spinlock.h>
 
 static vma_list_t *vma_list = NULL;
 static vma_list_t *vma_free_list = NULL;
+
+static spinlock_t vma_lock = SPINLOCK_INITIALIZER;
 
 isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
 	uintptr_t addr;
@@ -24,12 +27,14 @@ isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
 	}
 
 	// Find a VMA that covers the faulting address
+	spin_acquire(&vma_lock);
 	vma_list_t *vma = vma_list;
 	while (vma) {
 		if ((uintptr_t)vma->base <= addr && addr < (uintptr_t)vma->base + vma->size)
 			break;
 		vma = vma->next;
 	}
+	spin_release(&vma_lock);
 	if (vma == NULL)
 		panic("Page fault at address %p, no VMA found", (void *)addr);
 
@@ -99,6 +104,8 @@ void vmem_init(void) {
 }
 
 void create_vma(void *base, size_t size, uint64_t flags) {
+	uint64_t prev_irq = spin_acquire_irqsave(&vma_lock);
+
 	vma_list_t *vma = alloc_vma();
 	vma->base = base;
 	vma->size = size;
@@ -124,9 +131,13 @@ void create_vma(void *base, size_t size, uint64_t flags) {
 		if (curr)
 			curr->prev = vma;
 	}
+
+	spin_release_irqrestore(&vma_lock, prev_irq);
 }
 
 void destroy_vma(vma_list_t *vma) {
+	uint64_t flags = spin_acquire_irqsave(&vma_lock);
+
 	if (vma->prev)
 		vma->prev->next = vma->next;
 	else
@@ -136,9 +147,13 @@ void destroy_vma(vma_list_t *vma) {
 		vma->next->prev = vma->prev;
 
 	free_vma(vma);
+
+	spin_release_irqrestore(&vma_lock, flags);
 }
 
 void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
+	uint64_t prev_irq = spin_acquire_irqsave(&vma_lock);
+
 	vma_list_t *prev = vma_list;
 	vma_list_t *curr = vma_list->next; // Guaranteed to exist since we always have at least 4 mappings
 	while (curr) {
@@ -165,6 +180,8 @@ void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 					// Create a new VMA in the gap
 					create_vma(free_addr, npages * PAGE_SIZE, flags);
 				}
+
+				spin_release_irqrestore(&vma_lock, prev_irq);
 				return free_addr;
 			}
 			if (prev->base >= end)
@@ -184,6 +201,8 @@ void *vmalloc(size_t npages, uint64_t flags) {
 void vfree(void *addr, size_t npages) {
 	// Go to beginning of page
 	addr = (void *)((uintptr_t)addr & ~(PAGE_SIZE - 1));
+
+	uint64_t flags = spin_acquire_irqsave(&vma_lock);
 
 	// Find the VMA that contains the address
 	vma_list_t *prev = vma_list;
@@ -221,4 +240,6 @@ void vfree(void *addr, size_t npages) {
 	} else {
 		panic("vfree: Invalid free address");
 	}
+
+	spin_release_irqrestore(&vma_lock, flags);
 }

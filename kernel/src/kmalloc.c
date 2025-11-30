@@ -2,6 +2,7 @@
 
 #include <kernel/paging.h>
 #include <kernel/panic.h>
+#include <kernel/spinlock.h>
 #include <kernel/vmem.h>
 
 #define BLOCK_FREE 0x80000000
@@ -9,6 +10,7 @@
 #define BLOCK_SIZE_MASK 0x7fff
 
 static uint32_t *heap = (uint32_t *)VMEM_HEAP_BASE;
+static spinlock_t kmalloc_lock = SPINLOCK_INITIALIZER;
 
 void kmalloc_init(void) {
 	heap[0] = (PAGE_SIZE - 4) | BLOCK_FREE | BLOCK_END;
@@ -19,10 +21,11 @@ void *kmalloc(size_t size) {
 		panic("kmalloc: Attempted to allocate 0 bytes");
 
 	size = (size + 3) & ~3;
-	if (size + 4 >= 0x8000) {
-		return vmalloc((size + PAGE_SIZE - 1) / PAGE_SIZE, VMA_READ | VMA_WRITE);
+	if (size + 4 >= 0x1000) {
+		return vmalloc((size + 4 + PAGE_SIZE - 1) / PAGE_SIZE, VMA_READ | VMA_WRITE);
 	}
 
+	uint64_t flags = spin_acquire_irqsave(&kmalloc_lock);
 	uint32_t *block = heap;
 	while (true) {
 		uint16_t block_size = *block & BLOCK_SIZE_MASK;
@@ -36,6 +39,7 @@ void *kmalloc(size_t size) {
 					*block &= ~BLOCK_END;
 				}
 				*block = (*block & ~BLOCK_FREE & ~BLOCK_SIZE_MASK) | size;
+				spin_release_irqrestore(&kmalloc_lock, flags);
 				return block + 1;
 			}
 		}
@@ -47,12 +51,15 @@ void *kmalloc(size_t size) {
 		block = (uint32_t *)((uintptr_t)block + block_size + 4);
 	}
 
+	spin_release_irqrestore(&kmalloc_lock, flags);
 	return NULL; // No suitable block found
 }
 
 void kfree(void *ptr) {
 	if (ptr == NULL)
 		panic("kfree: Attempted to free a NULL pointer");
+
+	uint64_t flags = spin_acquire_irqsave(&kmalloc_lock);
 
 	uint32_t *block = (uint32_t *)ptr - 1;
 	if (*block & BLOCK_FREE)
@@ -76,4 +83,6 @@ void kfree(void *ptr) {
 		if (*block & BLOCK_END)
 			*prev_block |= BLOCK_END;
 	}
+
+	spin_release_irqrestore(&kmalloc_lock, flags);
 }

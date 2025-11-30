@@ -121,6 +121,8 @@ bool pci_register_driver(pci_driver_t *driver) {
 	next:
 		dev = dev->next;
 	}
+
+	return true;
 }
 
 void pci_init(void) {

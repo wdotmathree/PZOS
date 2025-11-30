@@ -72,4 +72,10 @@ static inline __attribute__((always_inline)) void cpuid(uint32_t *eax, uint32_t 
 				 : "+a"(*eax), "=b"(*ebx), "+c"(*ecx), "=d"(*edx));
 }
 
+static inline uint64_t _bslr_u64(uint64_t value) {
+	uint64_t result;
+	asm volatile("bsr %0, %1" : "=r"(result) : "rm"(value));
+	return result;
+}
+
 #endif

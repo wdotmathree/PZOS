@@ -2,7 +2,10 @@
 
 #include <kernel/acpi.h>
 #include <kernel/log.h>
+#include <kernel/spinlock.h>
 #include <kernel/time.h>
+
+static spinlock_t ps2_lock;
 
 static inline uint8_t read_config(void) {
 	ps2_send_ctrl(0x20);
@@ -43,35 +46,56 @@ bool ps2_init(void) {
 	// Register default ISRs
 	ps2_register_kbd_isr(NULL);
 
+	spinlock_init(&ps2_lock);
+
 	return true;
 }
 
 bool ps2_send_kbd(uint8_t byte) {
+	spin_acquire(&ps2_lock);
+
 	for (int i = 0; i < 10000; i++) {
 		if (!(ps2_read_status() & 0x02)) {
 			ps2_send_data(byte);
+
+			spin_release(&ps2_lock);
 			return true;
 		}
 	}
+
+	spin_release(&ps2_lock);
 	return false;
 }
 
 bool ps2_send_mse(uint8_t byte) {
+	spin_acquire(&ps2_lock);
+
 	ps2_send_ctrl(0xd4);
 	for (int i = 0; i < 1000; i++) {
 		if (!(ps2_read_status() & 0x04)) {
 			ps2_send_ctrl_long(0xd1, byte);
+
+			spin_release(&ps2_lock);
 			return true;
 		}
 	}
+
+	spin_release(&ps2_lock);
 	return false;
 }
 
 int ps2_read_sync(void) {
+	spin_acquire(&ps2_lock);
+
 	for (int i = 0; i < 1000; i++) {
 		if (ps2_read_status() & 0x01) {
-			return ps2_read_data();
+			int data = ps2_read_data();
+
+			spin_release(&ps2_lock);
+			return data;
 		}
 	}
+
+	spin_release(&ps2_lock);
 	return -1;
 }

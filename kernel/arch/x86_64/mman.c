@@ -1,13 +1,17 @@
 #include <kernel/mman.h>
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
+
+#include <x86_64/intrin.h>
 
 #include <kernel/defines.h>
 #include <kernel/log.h>
 #include <kernel/paging.h>
 #include <kernel/panic.h>
+#include <kernel/spinlock.h>
 #include <kernel/tty.h>
 #include <kernel/vmem.h>
 
@@ -22,14 +26,15 @@ static const char *MEM_TYPES[] = {
 	"FRAMEBUFFER",
 };
 
-static const size_t bitmap_size = 0x1000000 / 0x1000 / 8;
+#define LOWMEM_SIZE 0x10000000
+
+static const size_t bitmap_size = LOWMEM_SIZE / 0x1000 / 8;
 static uint64_t *bitmap;
 static uint64_t *page_stack;
 static uint64_t *page_stack_base;
 
 uintptr_t hhdm_off;
 
-// Our definition of "high memory" is everything above **16MiB** (not usable for ISA DMA) instead of the usual 1MiB
 void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_t hhdm_offset, uintptr_t kernel_end) {
 	// Usable and bootloader reclaimable chunks are guaranteed to not overlap and are page aligned
 	size_t count = mmap->entry_count;
@@ -61,13 +66,13 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	LOG("MMAN", "Usable memory size: %zu bytes (%zu pages)", mem_size, mem_size / 0x1000);
 
 	// Find candidates for low memory bitmap and high memory page stack
-	size_t reserve = ((max_addr - 0x1000000) / 0x1000 * 8 + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
+	size_t reserve = ((max_addr - LOWMEM_SIZE) / 0x1000 * 8 + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
 	for (size_t i = 0; i < count; i++) {
 		struct limine_memmap_entry *entry = mmap->entries[i];
 		if (entry->type == LIMINE_MEMMAP_USABLE) {
-			if (entry->base + entry->length > max(entry->base, 0x1000000) + reserve * 0x1000) {
+			if (entry->base + entry->length > max(entry->base, LOWMEM_SIZE) + reserve * 0x1000) {
 				LOG("MMAN", "Reserving %zu pages for memory management structures at %p", reserve, entry->base);
-				bitmap = (uint64_t *)(max(entry->base, 0x1000000) + hhdm_off);
+				bitmap = (uint64_t *)(max(entry->base, LOWMEM_SIZE) + hhdm_off);
 				break;
 			}
 		}
@@ -86,7 +91,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 			size_t start_page = entry->base / 0x1000;
 			size_t end_page = (entry->base + entry->length - 1) / 0x1000;
 			uint64_t mask = 1ULL << (start_page % 64);
-			for (size_t j = start_page; j <= min(end_page, 0x1000000 / 0x1000 - 1); j++) {
+			for (size_t j = start_page; j <= min(end_page, LOWMEM_SIZE / 0x1000 - 1); j++) {
 				bitmap[j / 64] |= mask;
 				asm("rol %0, 1" : "+r"(mask));
 			}
@@ -101,11 +106,11 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		if (entry->type == LIMINE_MEMMAP_USABLE) {
 			size_t start_page = entry->base / 0x1000;
 			size_t end_page = (entry->base + entry->length - 1) / 0x1000;
-			for (size_t j = end_page; j >= max(start_page, 0x1000000 / 0x1000); j--) {
+			for (size_t j = end_page; j >= max(start_page, LOWMEM_SIZE / 0x1000); j--) {
 				// Skip the pages we reserved for memory management
 				if (j == ((uintptr_t)bitmap - hhdm_off) / 0x1000 + reserve - 1) {
 					j -= reserve;
-					if (j < max(start_page, 0x1000000 / 0x1000))
+					if (j < max(start_page, LOWMEM_SIZE / 0x1000))
 						continue;
 				}
 				*++page_stack = j;
@@ -196,7 +201,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		if (entry->type != LIMINE_MEMMAP_USABLE && entry->type != LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE)
 			continue;
 
-		uintptr_t end = entry->base + entry->length & -0x1000;
+		uintptr_t end = (entry->base + entry->length) & -0x1000;
 		uintptr_t ptr = entry->base & -0x1000;
 
 		// Pad to 2MiB
@@ -302,7 +307,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 				// Make sure we don't reclaim the page for the top of stack
 				if (j == stack_base / 0x1000)
 					continue;
-				if (j < 0x1000000 / 0x1000)
+				if (j < LOWMEM_SIZE / 0x1000)
 					bitmap[j / 64] |= (1ULL << (j % 64));
 				else
 					*++page_stack = j;
@@ -313,35 +318,50 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	LOG("MMAN", "Memory management initialized successfully.");
 }
 
+static spinlock_t alloc_lock = SPINLOCK_INITIALIZER;
+
 void *alloc_page(void) {
+	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
+
 	if (page_stack < page_stack_base) {
-		// If stack is empty, try to allocate from low memory
+		// If stack is empty, try to allocate from bitmap
 		for (size_t i = 0; i < bitmap_size; i++) {
 			if (bitmap[i]) {
 				int bit = __builtin_ctzll(bitmap[i]);
-				bitmap[i] &= ~(1ULL << bit);
+				bitmap[i] = _bslr_u64(bitmap[i]);
+
+				spin_release_irqrestore(&alloc_lock, flags);
 				return (void *)((i * 64 + bit) * 0x1000);
 			}
 		}
 		panic("alloc_page: No free pages available");
 	}
+
 	// Allocate from the stack
-	return (void *)(*page_stack-- * 0x1000);
+	void *ret = (void *)(*(page_stack--) * 0x1000);
+	spin_release_irqrestore(&alloc_lock, flags);
+	return ret;
 }
 
 void free_page(void *ptr) {
+	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
+
 	size_t page_num = (uintptr_t)ptr / 0x1000;
-	if ((uintptr_t)ptr < 0x1000000) {
+	if ((uintptr_t)ptr < LOWMEM_SIZE) {
 		// Free from bitmap
 		bitmap[page_num / 64] |= (1ULL << (page_num % 64));
 	} else {
 		*++page_stack = page_num;
 	}
+
+	spin_release_irqrestore(&alloc_lock, flags);
 }
 
 void *alloc_contig(size_t npages) {
 	if (npages == 0)
 		return NULL;
+
+	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
 
 	// We always allocate from low memory so we can use the bitmap
 	size_t cnt = 0;
@@ -353,6 +373,8 @@ void *alloc_contig(size_t npages) {
 				for (size_t j = 0; j < npages; j++) {
 					bitmap[(i - cnt + j) / 64] &= ~(1ULL << ((i - cnt + j) % 64));
 				}
+
+				spin_release_irqrestore(&alloc_lock, flags);
 				return (void *)((i - cnt + 1) * 0x1000);
 			}
 		} else {
@@ -367,8 +389,12 @@ void free_contig(void *ptr, size_t npages) {
 	if (npages == 0 || ptr == NULL)
 		return;
 
+	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
+
 	size_t page_num = (uintptr_t)ptr / 0x1000;
 	for (size_t i = 0; i < npages; i++) {
 		bitmap[page_num / 64] |= (1ULL << (page_num % 64));
 	}
+
+	spin_release_irqrestore(&alloc_lock, flags);
 }
