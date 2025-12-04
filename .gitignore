@@ -8,3 +8,4 @@ isodir/
 !glyphs.bin
 .vscode/settings.json
 sysroot/
+logfile
