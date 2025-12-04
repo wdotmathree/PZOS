@@ -123,25 +123,25 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	uint64_t *pml4 = (uint64_t *)(hhdm_off + alloc_page());
 	memset(pml4, 0, 0x1000);
 
-	// Map kernel stack (page 0xffff7ffff)
+	// Map top page of kernel stack
 	uint64_t *pdpt = (uint64_t *)(hhdm_off + alloc_page());
 	pml4[0x1ff] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW;
 	memset(pdpt, 0, 0x1000);
 	uint64_t *pd = (uint64_t *)(hhdm_off + alloc_page());
-	pdpt[0x1fd] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	pdpt[0x1ff] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pd, 0, 0x1000);
 	uint64_t *pt = (uint64_t *)(hhdm_off + alloc_page());
 	pd[0x1ff] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pt, 0, 0x1000);
 	uintptr_t stack_base = 0;
 	asm("mov %0, [rbp]" : "=r"(stack_base));
-	pt[0x1ff] = (stack_base - 0x1000 - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+	pt[0x1fe] = (stack_base - 0x1000 - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
 
 	// Map framebuffer
 	uintptr_t ptr = framebuf_base;
-	uintptr_t vptr = 0xfffff80000000000;
+	uintptr_t vptr = 0xfffffe8000000000;
 	pdpt = (uint64_t *)(hhdm_off + alloc_page());
-	pml4[0x1f0] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
+	pml4[0x1fd] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
 	memset(pdpt, 0, 0x1000);
 	pd = (uint64_t *)(hhdm_off + alloc_page());
 	pdpt[0x000] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
@@ -287,11 +287,10 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	}
 
 	// Switch to our new page tables
-	extern uintptr_t tty_buf;
-	tty_buf = 0xfffff80000000000;
+	*framebuf = (void *)0xfffffe8000000000;
 	asm("add rsp, %0\n\t"
 		"add rbp, %0\n\t"
-		"mov cr3, %1" : : "g"(0xffffffff80000000 - stack_base),
+		"mov cr3, %1" : : "g"(VMEM_STACK_BASE - stack_base),
 						  "r"((uintptr_t)pml4 - hhdm_off), "n"(KERNEL_CS));
 
 	LOG("MMAN", "Page tables initialized successfully.");

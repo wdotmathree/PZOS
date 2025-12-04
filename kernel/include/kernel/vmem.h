@@ -1,18 +1,18 @@
 /**
- * Virtual Map: (Below are PAGE NUMBERS, not addresses)
- * PML4[0x100-0x17f] 0x800000000-0xbffffffff: Direct map (max 64TiB)
- * PML4[0x180] 0xc00000000: Kernel heap - Can expand up to 8TiB (16 PML4 entries)
- * PML4[0x1a0] 0xd00000000: Kernel virtual area - Can expand up to 8TiB (16 PML4 entries)
- * PML4[0x1c0] 0xe00000000: Modules - Can expand up to 8TiB (16 PML4 entries)
- * PML4[0x1f0] 0xf80000000: Framebuffer (Mapped using large pages if possible)
- * PML4[0x1ff] 0xff8000000: Kernel execution space
- * 		L--> (0xff8000000-0xfffefffff): Memory management information (bitmaps, stacks, etc.)
- * 		L--> (0xffff00000-0xffff7ffff): Kernel stacks (Only top page is mapped by mman_init())
- * 		L--> (0xffff80000-0xfffffxxxx): Kernel executable (Segments as loaded by Limine)
- *
+ * Virtual Map:
+ * PML4[0x100-0x17f] 0xffff800000000000-0xffffbfffffffffff: Direct map (64 TiB)
+ * PML4[0x190-0x1cf] 0xffffc80000000000-0xffffe7ffffffffff: Kernel virtual area (32 TiB)
+ * PML4[0x1fd-0x1fd] 0xfffffe8000000000-0xfffffeffffffffff: Framebuffer (512 GiB)
+ * PML4[0x1fe-0x1fe] 0xffffff0000000000-0xffffff7fffffffff: Recursive page table mapping (512 GiB)
+ * PML4[0x1ff-0x1ff]: +--> 0xffffffff10000000-0xffffffff7fffffff: Kernel modules (1.75 GiB)
+ *					  +--> 0xffffffff80000000-0xffffffff9fffffff: Kernel executable (512 MiB)
+ *					  +--> 0xffffffffa0000000-0xffffffffffffefff: Kernel stacks (~1.25 GiB)
+ *					  \--> 0xfffffffffffff000-0xffffffffffffffff: BSP stack guard page
  * Notes:
- * - Mappings are initially set up in mman_init(), where we replace Limine's default HHDM
- * - Spaces between specified sections are guard spaces, which are NEVER mapped
+ * - If KASLR is enabled, the direct map and virtual area are shifted (independently) by a random offset
+ * - Mappings are initially set up in mman_init()
+ * - The above areas will always have at least one guard page between them, regardless of KASLR offsets
+ * - The virtual area is used for vmalloc and I/O mappings
  */
 
 #pragma once
@@ -27,7 +27,7 @@
 #define VMEM_HEAP_BASE 0xffffc00000000000
 #define VMEM_VIRT_BASE 0xffffd00000000000
 #define VMEM_MMIO_BASE 0xffffe00000000000
-#define VMEM_STACK_BASE 0xffffffff80000000
+#define VMEM_STACK_BASE 0xfffffffffffff000
 
 #define VMEM_HEAP_END 0xffffc80000000000
 #define VMEM_VIRT_END 0xffffd80000000000
@@ -58,12 +58,12 @@ void vmem_init(void);
 void create_vma(void *base, size_t size, uint64_t flags);
 void destroy_vma(vma_list_t *vma);
 
-// Allocates `npages` pages of virtual memory, initially not backed by anything
+// Allocates `npages` pages of demand paged virtual memory
 void *vmalloc(size_t npages, uint64_t flags);
 void *vmalloc_at(void *base, void *limit, size_t npages, uint64_t flags);
 
 // Frees the vmalloc'd memory at the page referenced by `addr`
-// It all `n` pages must belong to the same VMA
+// All `npages` must belong to the same VMA
 void vfree(void *addr, size_t npages);
 
 #endif

@@ -16,4 +16,7 @@ void tty_putchar(char c);
 void tty_write(const char *data, size_t size);
 int tty_puts(const char *data);
 
+// Used to unlock the tty in panic situations
+void tty_panic_unlock(void);
+
 #endif

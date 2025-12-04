@@ -91,12 +91,11 @@ void vmem_init(void) {
 	create_vma((void *)VMEM_VIRT_BASE, PAGE_SIZE, VMA_READ | VMA_WRITE); // One page for the preallocated VMA's
 	create_vma((void *)VMEM_HEAP_BASE, PAGE_SIZE, VMA_READ | VMA_WRITE); // We need at least one page for heap, so might as well allocate it now
 
-	// Finish setting up the kernel stack
+	// Finish setting up the BSP stack
 	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
 	for (size_t i = 0; i < KERNEL_STACK_SIZE - PAGE_SIZE; i += PAGE_SIZE) {
 		void *page = (void *)((uintptr_t)kernel_stack_bottom + i);
 		map_page(page, alloc_page(), PAGE_RW | PAGE_NX);
-		invlpg(page);
 	}
 
 	// Register the page fault handler

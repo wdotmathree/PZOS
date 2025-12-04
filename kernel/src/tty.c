@@ -487,3 +487,7 @@ int tty_puts(const char *data) {
 	tty_write(data, len);
 	return len;
 }
+
+void tty_panic_unlock(void) {
+	spin_release(&tty_lock);
+}
