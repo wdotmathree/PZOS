@@ -9,15 +9,15 @@ typedef struct nvme_queue_t {
 	uint16_t id;
 	uint16_t sq_size;
 	uint16_t cq_size;
-	uint64_t doorbell_addr;
-	uint64_t *sq_buf;
-	uint64_t *cq_buf;
+	void *doorbell_addr;
+	void *sq_buf;
+	void *cq_buf;
 	uint16_t sq_head;
 	uint16_t cq_head;
 } nvme_queue_t;
 
 typedef struct nvme_ctrl_t {
-	uintptr_t mmio_base;
+	void *mmio_base;
 	uint16_t dstrd;
 	nvme_queue_t admin_q;
 	nvme_queue_t io_q;
@@ -33,9 +33,9 @@ bool nvme_attach(pci_dev_t *dev) {
 	dev->header->command |= PCI_CMD_BUS_MASTER | PCI_CMD_MEM_SPACE;
 	dev->header->command &= ~PCI_CMD_INTERRUPT_DISABLE;
 	// Map BAR0
-	uintptr_t mmio_base = (((uint64_t)header->bar1 << 32) | (header->bar0 & ~0x0f)) + hhdm_off;
-	map_page((void *)mmio_base, (void *)(mmio_base - hhdm_off), PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_UC));
-	LOG("NVMe", "Found NVMe controller at %02x:%02x.%x, MMIO base: %p", dev->bus, dev->device, dev->function, mmio_base - hhdm_off);
+	void *mmio_base = (void *)__va(((uint64_t)header->bar1 << 32) | (header->bar0 & ~0x0f));
+	map_page((void *)mmio_base, __pa(mmio_base), PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_UC));
+	LOG("NVMe", "Found NVMe controller at %02x:%02x.%x, MMIO base: %p", dev->bus, dev->device, dev->function, __pa(mmio_base));
 
 	// Initialize NVMe controller
 	nvme_ctrl_t *ctrl = kmalloc(sizeof(nvme_ctrl_t));
@@ -49,15 +49,15 @@ bool nvme_attach(pci_dev_t *dev) {
 	ctrl->admin_q.id = 0;
 	ctrl->admin_q.sq_size = 64;
 	ctrl->admin_q.cq_size = 64;
-	ctrl->admin_q.sq_buf = alloc_page();
-	ctrl->admin_q.cq_buf = alloc_page();
+	ctrl->admin_q.sq_buf = __va(alloc_page());
+	ctrl->admin_q.cq_buf = __va(alloc_page());
 	ctrl->admin_q.doorbell_addr = mmio_base + 0x1000;
 	ctrl->admin_q.sq_head = 0;
 	ctrl->admin_q.cq_head = 0;
 	// Write attributes to controller
 	*(volatile uint32_t *)(mmio_base + 0x24) = ((ctrl->admin_q.cq_size - 1) << 16) | (ctrl->admin_q.sq_size - 1); // AQA
-	*(volatile uint64_t *)(mmio_base + 0x28) = (uintptr_t)ctrl->admin_q.cq_buf; // ASQ
-	*(volatile uint64_t *)(mmio_base + 0x30) = (uintptr_t)ctrl->admin_q.sq_buf; // ACQ
+	*(volatile uint64_t *)(mmio_base + 0x28) = __pa(ctrl->admin_q.cq_buf); // ASQ
+	*(volatile uint64_t *)(mmio_base + 0x30) = __pa(ctrl->admin_q.sq_buf); // ACQ
 
 	// Configure controller command sets
 	// Other I/O command sets are not yet implemented

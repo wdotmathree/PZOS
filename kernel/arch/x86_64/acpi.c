@@ -5,8 +5,6 @@
 #include <kernel/log.h>
 #include <kernel/paging.h>
 
-extern uintptr_t hhdm_off;
-
 static uint8_t calculate_checksum(void *ptr, size_t size) {
 	uint8_t sum = 0;
 	for (size_t i = 0; i < size; i++) {
@@ -21,11 +19,11 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 	ACPI_RSDP *rsdp = NULL;
 
 	if (system_table == NULL) {
-		map_page((void *)hhdm_off, (void *)0, PAGE_NX | PAGE_TYPE(PAT_WB));
+		map_page((void *)hhdm_off, 0, PAGE_NX | PAGE_TYPE(PAT_WB));
 		uint64_t search_string = 0x2052545020445352; // "RSD PTR "
 
-		uint16_t *ebda_seg = (uint16_t *)(hhdm_off + 0x040e); // EBDA segment address
-		uint64_t *ptr = (uint64_t *)(hhdm_off + (*ebda_seg << 4)); // Beginning of EBDA
+		uint16_t *ebda_seg = (uint16_t *)__va(0x040e); // EBDA segment address
+		uint64_t *ptr = (uint64_t *)__va(*ebda_seg << 4); // Beginning of EBDA
 		for (size_t i = 0; i < 0x400 / 16; i++) {
 			if (ptr[i] == search_string) {
 				rsdp = (ACPI_RSDP *)(ptr + i);
@@ -42,10 +40,10 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 		unmap_page((void *)hhdm_off);
 
 		if (rsdp == NULL) {
-			for (uintptr_t addr = 0xe0000; addr < 0x100000; addr += 0x1000)
-				map_page((void *)(hhdm_off + addr), (void *)addr, PAGE_NX | PAGE_TYPE(PAT_WB));
+			for (physaddr_t addr = 0xe0000; addr < 0x100000; addr += 0x1000)
+				map_page((void *)__va(addr), addr, PAGE_NX | PAGE_TYPE(PAT_WB));
 
-			ptr = (uint64_t *)(hhdm_off + 0xe0000);
+			ptr = (uint64_t *)__va(0xe0000);
 			for (size_t i = 0; i < 0x10000 / 16; i++) { // 0xe0000 to 0xfffff
 				if (ptr[i] == search_string) {
 					rsdp = (ACPI_RSDP *)(ptr + i);
@@ -64,20 +62,20 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 		if (rsdp != NULL)
 			LOG("ACPI", "RSDP found at %p", rsdp);
 	} else {
-		map_page((void *)(hhdm_off + (uintptr_t)system_table), system_table, PAGE_NX | PAGE_TYPE(PAT_WB));
-		system_table = (EFI_SYSTEM_TABLE *)(hhdm_off + (uintptr_t)system_table);
+		map_page(__va((physaddr_t)system_table), (physaddr_t)system_table, PAGE_NX | PAGE_TYPE(PAT_WB));
+		system_table = (EFI_SYSTEM_TABLE *)__va((physaddr_t)system_table);
 		uintptr_t end_addr = (uintptr_t)system_table + system_table->Hdr.HeaderSize + system_table->NumberOfTableEntries * sizeof(EFI_CONFIGURATION_TABLE);
 		for (uintptr_t addr = (uintptr_t)system_table & -0x1000; addr < end_addr; addr += 0x1000)
-			map_page((void *)addr, (void *)(addr - hhdm_off), PAGE_NX | PAGE_TYPE(PAT_WB));
+			map_page((void *)addr, __pa(addr), PAGE_NX | PAGE_TYPE(PAT_WB));
 
 		// Search for ACPI tables in the EFI system table
 		EFI_GUID guid = EFI_ACPI_20_TABLE_GUID;
 		uint64_t *search_term = (uint64_t *)&guid;
-		EFI_CONFIGURATION_TABLE *tables = (void *)(hhdm_off + (uintptr_t)system_table->ConfigurationTable);
+		EFI_CONFIGURATION_TABLE *tables = (void *)__va(system_table->ConfigurationTable);
 		for (size_t i = 0; i < system_table->NumberOfTableEntries; i++) {
 			if (((uint64_t *)&tables[i].VendorGuid)[0] == search_term[0] &&
 				((uint64_t *)&tables[i].VendorGuid)[1] == search_term[1]) {
-				rsdp = (ACPI_RSDP *)(hhdm_off + (uintptr_t)tables[i].VendorTable);
+				rsdp = (ACPI_RSDP *)__va(tables[i].VendorTable);
 				map_page(rsdp, tables[i].VendorTable, PAGE_NX | PAGE_TYPE(PAT_WB));
 				if (calculate_checksum(rsdp, sizeof(ACPI_RSDP)) == 0 &&
 					calculate_checksum(rsdp, sizeof(ACPI_XSDP)) == 0)
@@ -96,26 +94,26 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 	}
 	if (rsdp->Revision >= 2) {
 		ACPI_XSDP *xsdp = (ACPI_XSDP *)rsdp;
-		rsdt = (ACPI_TABLE_HEADER *)(hhdm_off + xsdp->XsdtAddress);
-		map_page(rsdt, (void *)xsdp->XsdtAddress, PAGE_NX | PAGE_TYPE(PAT_WB));
-		uintptr_t end_addr = xsdp->XsdtAddress + rsdt->Length;
-		for (uintptr_t addr = xsdp->XsdtAddress & -0x1000; addr < end_addr; addr += 0x1000)
-			map_page((void *)(hhdm_off + addr), (void *)addr, PAGE_NX | PAGE_TYPE(PAT_WB));
+		rsdt = (ACPI_TABLE_HEADER *)__va(xsdp->XsdtAddress);
+		map_page(rsdt, xsdp->XsdtAddress, PAGE_NX | PAGE_TYPE(PAT_WB));
+		physaddr_t end_addr = xsdp->XsdtAddress + rsdt->Length;
+		for (physaddr_t addr = xsdp->XsdtAddress & -0x1000; addr < end_addr; addr += 0x1000)
+			map_page(__va(addr), addr, PAGE_NX | PAGE_TYPE(PAT_WB));
 	} else {
 		LOG("ACPI", "ACPI revisions below 2.0 are not supported.");
 		return;
 	}
 
 	// List ACPI tables
-	ACPI_TABLE_HEADER **tables = (ACPI_TABLE_HEADER **)((uintptr_t)rsdt + sizeof(ACPI_TABLE_HEADER));
+	physaddr_t *tables = (physaddr_t *)((uintptr_t)rsdt + sizeof(ACPI_TABLE_HEADER));
 	uint32_t num_entries = (rsdt->Length - sizeof(ACPI_TABLE_HEADER)) / sizeof(uint64_t);
 	for (uint32_t i = 0; i < num_entries; i++) {
-		ACPI_TABLE_HEADER *table = (ACPI_TABLE_HEADER *)(hhdm_off + (uintptr_t)tables[i]);
-		size_t start_page = (uintptr_t)tables[i];
-		map_page(table, (void *)tables[i], PAGE_NX | PAGE_TYPE(PAT_WB));
+		ACPI_TABLE_HEADER *table = (ACPI_TABLE_HEADER *)__va(tables[i]);
+		size_t start_page = (uintptr_t)tables[i] & -0x1000;
+		map_page(table, tables[i], PAGE_NX | PAGE_TYPE(PAT_WB));
 		uintptr_t end_addr = (uintptr_t)tables[i] + table->Length;
-		for (uintptr_t addr = start_page & -0x1000; addr < end_addr; addr += 0x1000)
-			map_page((void *)(hhdm_off + addr), (void *)addr, PAGE_NX | PAGE_TYPE(PAT_WB));
+		for (uintptr_t addr = start_page; addr < end_addr; addr += 0x1000)
+			map_page(__va(addr), addr, PAGE_NX | PAGE_TYPE(PAT_WB));
 
 		if (calculate_checksum(table, table->Length) == 0) {
 			LOG("ACPI", "%.4s %p v%02hhu %-6.6s %-8.8s", table->Signature, table, table->Revision, table->OEMID, table->OEMTableID);
@@ -129,13 +127,13 @@ void *acpi_get_table(acpi_sig_t signature) {
 	if (rsdt == NULL)
 		return NULL;
 
-	ACPI_TABLE_HEADER **tables = (ACPI_TABLE_HEADER **)((uintptr_t)rsdt + sizeof(ACPI_TABLE_HEADER));
+	physaddr_t *tables = (physaddr_t *)((void *)rsdt + sizeof(ACPI_TABLE_HEADER));
 	uint32_t num_entries = (rsdt->Length - sizeof(ACPI_TABLE_HEADER)) / sizeof(uint64_t);
 	for (uint32_t i = 0; i < num_entries; i++) {
-		ACPI_TABLE_HEADER *table = (ACPI_TABLE_HEADER *)(hhdm_off + (uintptr_t)tables[i]);
+		ACPI_TABLE_HEADER *table = (ACPI_TABLE_HEADER *)__va(tables[i]);
 		if (*(uint32_t *)&table->Signature == signature) {
 			if (calculate_checksum(table, table->Length) == 0) {
-				return (void *)((uintptr_t)table);
+				return table;
 			} else {
 				LOG("ACPI", "Checksum mismatch for table with signature %c%c%c%c",
 					(signature >> 24) & 0xFF, (signature >> 16) & 0xFF,

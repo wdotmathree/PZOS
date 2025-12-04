@@ -11,10 +11,8 @@
 
 #define CONFIG_ADDR(bus, dev, func) ((mmio_bases[bus]) + (((dev) << 15) | ((func) << 12)))
 
-extern uintptr_t hhdm_off;
-
 static uint16_t num_segment_groups = 0;
-static uintptr_t mmio_bases[65536];
+static void *mmio_bases[65536];
 
 static pci_bus_t *pci_tree = NULL;
 static pci_dev_t *pci_devices = NULL;
@@ -37,10 +35,10 @@ static pci_dev_t *pci_add_device(int seg_group, pci_bus_t *bus, int dev, int fun
 	return new_dev;
 }
 
-static void pci_enumerate_bus(int seg_group, int bus, uintptr_t base_addr, pci_bus_t *bus_ptr, int depth);
-static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t mmio_base, pci_bus_t *bus_ptr, int depth) {
+static void pci_enumerate_bus(int seg_group, int bus, void *base_addr, pci_bus_t *bus_ptr, int depth);
+static bool pci_check_func(int seg_group, int bus, int dev, int func, void *mmio_base, pci_bus_t *bus_ptr, int depth) {
 	void *cfg_addr = (void *)(mmio_base + ((dev << 15) | (func << 12)));
-	map_page(cfg_addr, cfg_addr - hhdm_off, PAGE_NX | PAGE_RW | PAGE_TYPE(PAT_UC));
+	map_page(cfg_addr, __pa(cfg_addr), PAGE_NX | PAGE_RW | PAGE_TYPE(PAT_UC));
 
 	uint16_t vendor_id = *(uint16_t *)(cfg_addr + 0x00);
 	if (vendor_id == 0xffff)
@@ -59,7 +57,7 @@ static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t 
 	if ((header_type & 0x7f) == 1) {
 		// PCI-to-PCI bridge
 		uint8_t secondary_bus = *(uint8_t *)(cfg_addr + 0x19);
-		uintptr_t sec_mmio_base = mmio_bases[secondary_bus];
+		void *sec_mmio_base = mmio_bases[secondary_bus];
 		if (sec_mmio_base == 0) {
 			LOG("PCI", "Warning: Secondary bus %u has no MMIO base, skipping", secondary_bus);
 		} else {
@@ -89,7 +87,7 @@ static bool pci_check_func(int seg_group, int bus, int dev, int func, uintptr_t 
 	return true;
 }
 
-static void pci_enumerate_bus(int seg_group, int bus, uintptr_t mmio_base, pci_bus_t *bus_ptr, int depth) {
+static void pci_enumerate_bus(int seg_group, int bus, void *mmio_base, pci_bus_t *bus_ptr, int depth) {
 	for (int dev = 0; dev < 32; dev++) {
 		if (!pci_check_func(seg_group, bus, dev, 0, mmio_base, bus_ptr, depth))
 			continue;
@@ -151,7 +149,7 @@ void pci_init(void) {
 				seg_group, entry->base_address, entry->start_bus_number, entry->end_bus_number);
 
 			for (int bus = entry->start_bus_number; bus <= entry->end_bus_number; bus++)
-				mmio_bases[bus] = entry->base_address + ((uintptr_t)bus << 20) + hhdm_off;
+				mmio_bases[bus] = __va(entry->base_address + ((uint64_t)bus << 20));
 
 			// Begin recursive enumeration
 			pci_enumerate_bus(seg_group, entry->start_bus_number, mmio_bases[entry->start_bus_number], pci_tree, 0);

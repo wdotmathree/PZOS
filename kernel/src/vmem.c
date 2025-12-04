@@ -25,7 +25,6 @@ static vma_list_t *alloc_vma(void) {
 	// Find a free virtual page
 	vma_list_t *free_addr = (vma_list_t *)vmalloc(PAGE_SIZE, VMA_READ | VMA_WRITE);
 	// Allocate a new VMA cache block
-	// map_page(free_addr, (void *)alloc_page(), PAGE_RW | PAGE_NX);
 	for (size_t i = 1; i < PAGE_SIZE / sizeof(vma_list_t); i++) {
 		vma_list_t *a = &free_addr[i - 1];
 		vma_list_t *b = &free_addr[i];
@@ -45,7 +44,7 @@ static void free_vma(vma_list_t *vma) {
 
 void vmem_init(void) {
 	// Initialize the VMA list
-	vma_free_list = alloc_page() + hhdm_off;
+	vma_free_list = __va(alloc_page());
 	for (size_t i = 1; i < PAGE_SIZE / sizeof(vma_list_t); i++) {
 		vma_list_t *a = &vma_free_list[i - 1];
 		vma_list_t *b = &vma_free_list[i];
@@ -56,7 +55,7 @@ void vmem_init(void) {
 	// Finish setting up the BSP stack
 	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
 	for (size_t i = 0; i < KERNEL_STACK_SIZE - PAGE_SIZE; i += PAGE_SIZE) {
-		void *page = (void *)((uintptr_t)kernel_stack_bottom + i);
+		void *page = (void *)(kernel_stack_bottom + i);
 		map_page(page, alloc_page(), PAGE_RW | PAGE_NX);
 	}
 
@@ -144,7 +143,7 @@ void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 			return addr;
 		} else if (vma_list->base + vma_list->size + npages * PAGE_SIZE <= end) {
 			// Allocate after
-			void *addr = (void *)((uintptr_t)vma_list->base + vma_list->size);
+			void *addr = vma_list->base + vma_list->size;
 			vma_list_t *new_vma = alloc_vma();
 			new_vma->base = addr;
 			new_vma->size = npages * PAGE_SIZE;
@@ -197,8 +196,8 @@ void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 		curr = curr->next;
 	}
 	// Allocate at the end if possible
-	if ((uintptr_t)prev->base + prev->size + npages * PAGE_SIZE <= (uintptr_t)end) {
-		void *addr = (void *)((uintptr_t)prev->base + prev->size);
+	if (prev->base + prev->size + npages * PAGE_SIZE <= end) {
+		void *addr = prev->base + prev->size;
 		vma_list_t *new_vma = alloc_vma();
 		new_vma->base = addr;
 		new_vma->size = npages * PAGE_SIZE;
@@ -243,7 +242,7 @@ void vfree(void *addr, size_t npages) {
 			destroy_vma(prev);
 		} else if (addr == prev->base) {
 			// Shrink from the start
-			prev->base = (void *)((uintptr_t)prev->base + npages * PAGE_SIZE);
+			prev->base = prev->base + npages * PAGE_SIZE;
 		} else if (addr + npages * PAGE_SIZE == prev->base + prev->size) {
 			// Shrink from the end
 			prev->size -= npages * PAGE_SIZE;

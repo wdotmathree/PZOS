@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include <kernel/acpi.h>
+#include <kernel/paging.h>
 
 #define PCI_ID_ANY ((uint32_t)-1)
 
@@ -21,7 +22,7 @@
 #define PCI_CMD_INTERRUPT_DISABLE 0x400
 
 typedef struct {
-	uintptr_t base_address;
+	physaddr_t base_address;
 	uint16_t segment_group_number;
 	uint8_t start_bus_number;
 	uint8_t end_bus_number;

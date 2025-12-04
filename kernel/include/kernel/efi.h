@@ -33,18 +33,18 @@ typedef struct {
 
 typedef struct {
 	EFI_GUID VendorGuid;
-	void *VendorTable;
+	uintptr_t VendorTable;
 } EFI_CONFIGURATION_TABLE;
 
 typedef struct {
 	EFI_TABLE_HEADER Hdr;
-	CHAR16 *FirmwareVendor;
+	uintptr_t FirmwareVendor; // CHAR16*
 	UINT32 FirmwareRevision;
 	uint64_t _unused[8];
 	// EFI_RUNTIME_SERVICES *RuntimeServices;
 	// EFI_BOOT_SERVICES *BootServices;
 	UINTN NumberOfTableEntries;
-	EFI_CONFIGURATION_TABLE *ConfigurationTable;
+	uintptr_t ConfigurationTable;
 } EFI_SYSTEM_TABLE;
 
 #define EFI_ACPI_TABLE_GUID \

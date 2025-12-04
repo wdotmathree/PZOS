@@ -319,7 +319,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 
 static spinlock_t alloc_lock = SPINLOCK_INITIALIZER;
 
-void *alloc_page(void) {
+physaddr_t alloc_page(void) {
 	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
 
 	if (page_stack < page_stack_base) {
@@ -330,14 +330,14 @@ void *alloc_page(void) {
 				bitmap[i] = _bslr_u64(bitmap[i]);
 
 				spin_release_irqrestore(&alloc_lock, flags);
-				return (void *)((i * 64 + bit) * 0x1000);
+				return (i * 64 + bit) * 0x1000;
 			}
 		}
 		panic("alloc_page: No free pages available");
 	}
 
 	// Allocate from the stack
-	void *ret = (void *)(*(page_stack--) * 0x1000);
+	physaddr_t ret = *(page_stack--) * 0x1000;
 	spin_release_irqrestore(&alloc_lock, flags);
 	return ret;
 }
@@ -356,9 +356,9 @@ void free_page(void *ptr) {
 	spin_release_irqrestore(&alloc_lock, flags);
 }
 
-void *alloc_contig(size_t npages) {
+physaddr_t alloc_contig(size_t npages) {
 	if (npages == 0)
-		return NULL;
+		return 0;
 
 	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
 
@@ -374,7 +374,7 @@ void *alloc_contig(size_t npages) {
 				}
 
 				spin_release_irqrestore(&alloc_lock, flags);
-				return (void *)((i - cnt + 1) * 0x1000);
+				return (i - cnt + 1) * 0x1000;
 			}
 		} else {
 			cnt = 0;

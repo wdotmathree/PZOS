@@ -14,7 +14,7 @@ extern vma_list_t *vma_list;
 extern spinlock_t vma_lock;
 
 isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
-	uintptr_t addr;
+	void *addr;
 	uint16_t error = frame->error_code;
 	asm volatile("mov %0, cr2" : "=r"(addr));
 
@@ -28,7 +28,7 @@ isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
 	spin_acquire(&vma_lock);
 	vma_list_t *vma = vma_list;
 	while (vma) {
-		if ((uintptr_t)vma->base <= addr && addr < (uintptr_t)vma->base + vma->size)
+		if (vma->base <= addr && addr < vma->base + vma->size)
 			break;
 		vma = vma->next;
 	}
@@ -44,12 +44,10 @@ isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
 	return frame;
 }
 
-extern uintptr_t hhdm_off;
-
 static spinlock_t paging_lock = SPINLOCK_INITIALIZER;
 
-void map_page(const void *virt_addr, const void *phys_addr, uint64_t flags) {
-	uintptr_t phys = (uintptr_t)phys_addr & -0x1000LL;
+void map_page(const void *virt_addr, const physaddr_t phys_addr, uint64_t flags) {
+	physaddr_t phys = phys_addr & -0x1000LL;
 	uintptr_t virt = (uintptr_t)virt_addr & -0x1000LL;
 	if (virt_addr == NULL)
 		panic("map_page: No virtual address provided");
@@ -62,28 +60,28 @@ void map_page(const void *virt_addr, const void *phys_addr, uint64_t flags) {
 	uint64_t prev_irq = spin_acquire_irqsave(&paging_lock);
 
 	if ((*pml4e & PAGE_PRESENT) == 0) {
-		uintptr_t addr = (uintptr_t)alloc_page();
+		physaddr_t addr = alloc_page();
 		*pml4e = addr | PAGE_PRESENT | PAGE_RW;
-		memset((void *)(hhdm_off + addr), 0, 0x1000);
+		memset((void *)__va(addr), 0, 0x1000);
 	}
-	pdpte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pml4e)) + LINADDR_PDPTE(virt);
+	pdpte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pml4e)) + LINADDR_PDPTE(virt);
 
 	if ((*pdpte & PAGE_PRESENT) == 0) {
-		uintptr_t addr = (uintptr_t)alloc_page();
+		physaddr_t addr = alloc_page();
 		*pdpte = addr | PAGE_PRESENT | PAGE_RW;
-		memset((void *)(hhdm_off + addr), 0, 0x1000);
+		memset((void *)__va(addr), 0, 0x1000);
 		// Bits 52:61 store the number of entries in the referenced pdpt/pd/pt
 		*pml4e += 1ULL << 52;
 	}
-	pde = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pdpte)) + LINADDR_PDE(virt);
+	pde = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pdpte)) + LINADDR_PDE(virt);
 
 	if ((*pde & PAGE_PRESENT) == 0) {
-		uintptr_t addr = (uintptr_t)alloc_page();
+		physaddr_t addr = alloc_page();
 		*pde = addr | PAGE_PRESENT | PAGE_RW;
-		memset((void *)(hhdm_off + addr), 0, 0x1000);
+		memset((void *)__va(addr), 0, 0x1000);
 		*pdpte += 1ULL << 52;
 	}
-	pte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTE(virt);
+	pte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTE(virt);
 
 	if ((*pte & PAGE_PRESENT)) {
 		if (TABLE_ENTRY_ADDR(*pte) == phys) {
@@ -110,17 +108,17 @@ void unmap_page(const void *virt_addr) {
 		spin_release_irqrestore(&paging_lock, flags);
 		goto unmapped;
 	}
-	uint64_t *pdpte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pml4e)) + LINADDR_PDPTE(virt);
+	uint64_t *pdpte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pml4e)) + LINADDR_PDPTE(virt);
 	if ((*pdpte & PAGE_PRESENT) == 0) {
 		spin_release_irqrestore(&paging_lock, flags);
 		goto unmapped;
 	}
-	uint64_t *pde = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pdpte)) + LINADDR_PDE(virt);
+	uint64_t *pde = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pdpte)) + LINADDR_PDE(virt);
 	if ((*pde & PAGE_PRESENT) == 0) {
 		spin_release_irqrestore(&paging_lock, flags);
 		goto unmapped;
 	}
-	uint64_t *pte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTE(virt);
+	uint64_t *pte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTE(virt);
 	if ((*pte & PAGE_PRESENT) == 0) {
 		spin_release_irqrestore(&paging_lock, flags);
 		goto unmapped;
@@ -170,7 +168,7 @@ bool is_mapped(const void *virt_addr) {
 		return false;
 	}
 
-	uint64_t *pdpte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pml4e));
+	uint64_t *pdpte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pml4e));
 	if ((*pdpte & PAGE_PRESENT) == 0) {
 		spin_release_irqrestore(&paging_lock, flags);
 		return false;
@@ -180,7 +178,7 @@ bool is_mapped(const void *virt_addr) {
 		return true;
 	}
 
-	uint64_t *pde = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pdpte));
+	uint64_t *pde = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pdpte));
 	if ((*pde & PAGE_PRESENT) == 0) {
 		spin_release_irqrestore(&paging_lock, flags);
 		return false;
@@ -190,7 +188,7 @@ bool is_mapped(const void *virt_addr) {
 		return true;
 	}
 
-	uint64_t *pte = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(*pde));
+	uint64_t *pte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pde));
 	spin_release_irqrestore(&paging_lock, flags);
 	return *pte & PAGE_PRESENT;
 }
