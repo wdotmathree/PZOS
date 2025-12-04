@@ -6,7 +6,10 @@
 #error "This file should only be included on x86_64 architecture."
 #endif
 
+#include <isr.h>
+
 #define PAGE_SIZE 0x1000
+#define PAGE_SHIFT 12
 
 // PAT memory types
 #define PAT_WB 0
@@ -44,9 +47,9 @@
 
 // Recursive page table access macros
 #define LINADDR_PML4E_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, 0x1fe, ((addr) >> 36) & 0xff8))
-// #define LINADDR_PDPTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, 0, ((addr) >> 27) & 0x1ffff8))
-// #define LINADDR_PDE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0, 0, ((addr) >> 18) & 0x3ffffff8))
-// #define LINADDR_PTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0, 0, 0, ((addr) >> 9) & 0x7ffffffff8))
+#define LINADDR_PDPTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0x1fe, 0, ((addr) >> 27) & 0x1ffff8))
+#define LINADDR_PDE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0x1fe, 0, 0, ((addr) >> 18) & 0x3ffffff8))
+#define LINADDR_PTE_PTR(addr) ((uint64_t *)BUILD_LINADDR(0x1fe, 0, 0, 0, ((addr) >> 9) & 0x7ffffffff8))
 
 #define invlpg(addr) \
 	asm volatile("invlpg [%0]" : : "r"((void *)(addr)) : "memory")
@@ -58,5 +61,7 @@
 	asm volatile("mov rax, cr0\n\t" \
 				 "mov cr0, rax"     \
 				 : : : "rax", "memory")
+
+isr_frame_t *page_fault_handler(isr_frame_t *const frame);
 
 #endif

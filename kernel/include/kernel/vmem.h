@@ -24,14 +24,9 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define VMEM_HEAP_BASE 0xffffc00000000000
-#define VMEM_VIRT_BASE 0xffffd00000000000
-#define VMEM_MMIO_BASE 0xffffe00000000000
+#define VMEM_VIRT_BASE 0xffffc80000000000
+#define VMEM_VIRT_END 0xffffe80000000000
 #define VMEM_STACK_BASE 0xfffffffffffff000
-
-#define VMEM_HEAP_END 0xffffc80000000000
-#define VMEM_VIRT_END 0xffffd80000000000
-#define VMEM_MMIO_END 0xffffe80000000000
 
 #define KERNEL_STACK_SIZE (64 * 1024) // 64 KiB stack size
 
@@ -62,7 +57,7 @@ void destroy_vma(vma_list_t *vma);
 void *vmalloc(size_t npages, uint64_t flags);
 void *vmalloc_at(void *base, void *limit, size_t npages, uint64_t flags);
 
-// Frees the vmalloc'd memory at the page referenced by `addr`
+// Frees vmalloc'd memory starting at the page referenced by `addr`
 // All `npages` must belong to the same VMA
 void vfree(void *addr, size_t npages);
 

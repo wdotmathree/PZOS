@@ -30,6 +30,8 @@
 					 "push r13\n\t"                   \
 					 "push r14\n\t"                   \
 					 "push r15\n\t"                   \
+					 "lea rax, [rip]\n\t"             \
+					 "mov [rsp + 0x88], rax\n\t"      \
 					 "mov %0, rsp\n\t"                \
 					 "and rsp, -16\n\t" : "=r"(ptr)); \
 		_panic(ptr, args);                            \

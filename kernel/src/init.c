@@ -64,8 +64,9 @@ void test(int a) {
 __attribute__((naked, noreturn)) void kinit(void) {
 	// Pop the (bogus) return address to get the stack base
 	// Save it in rbp (will be used in mman_init)
-	asm volatile("add rsp, 8\n\t"
-				 "mov rbp, rsp"
+	// Pushing rbp to pad rsp to 16 bytes (could have been anything but it's canonical to use rbp)
+	asm volatile("push rbp\n\t"
+				 "lea rbp, [rsp+16]"
 				 : : : "memory");
 
 	// Initialize TSC base (TSC count when the kernel was loaded)
@@ -123,7 +124,6 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	extern uint8_t *tty_buf;
 	mman_init(memory_map_request.response, &tty_buf, hhdm_request.response->offset, (uintptr_t)&_kernel_end);
 	vmem_init();
-	kmalloc_init();
 
 	acpi_init(efi_system_table_request.response ? (void *)efi_system_table_request.response->address : NULL);
 

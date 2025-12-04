@@ -7,6 +7,42 @@
 #include <kernel/mman.h>
 #include <kernel/panic.h>
 #include <kernel/spinlock.h>
+#include <kernel/vmem.h>
+
+extern vma_list_t *vma_list;
+
+extern spinlock_t vma_lock;
+
+isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
+	uintptr_t addr;
+	uint16_t error = frame->error_code;
+	asm volatile("mov %0, cr2" : "=r"(addr));
+
+	// Check if the fault was caused by a user-mode access
+	if (error & PF_USER) {
+		/// TODO: Handle user-mode page fault
+		panic("User-mode page fault at address %p", (void *)addr);
+	}
+
+	// Find a VMA that covers the faulting address
+	spin_acquire(&vma_lock);
+	vma_list_t *vma = vma_list;
+	while (vma) {
+		if ((uintptr_t)vma->base <= addr && addr < (uintptr_t)vma->base + vma->size)
+			break;
+		vma = vma->next;
+	}
+	spin_release(&vma_lock);
+	if (vma == NULL)
+		panic("Page fault at address %p RIP %p, no VMA found", (void *)addr, frame->isr_rip);
+
+	// Right now we only handle demand paging, so we will allocate a new page
+	/// TODO: Handle other cases (CoW, file mappings, etc.)
+	/// TODO: Handle flags properly
+	map_page((void *)addr, alloc_page(), PAGE_PRESENT | PAGE_RW | PAGE_NX);
+
+	return frame;
+}
 
 extern uintptr_t hhdm_off;
 

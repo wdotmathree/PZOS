@@ -10,41 +10,10 @@
 #include <kernel/panic.h>
 #include <kernel/spinlock.h>
 
-static vma_list_t *vma_list = NULL;
-static vma_list_t *vma_free_list = NULL;
+vma_list_t *vma_list = NULL;
+vma_list_t *vma_free_list = NULL;
 
-static spinlock_t vma_lock = SPINLOCK_INITIALIZER;
-
-isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
-	uintptr_t addr;
-	uint16_t error = frame->error_code;
-	asm volatile("mov %0, cr2" : "=r"(addr));
-
-	// Check if the fault was caused by a user-mode access
-	if (error & PF_USER) {
-		/// TODO: Handle user-mode page fault
-		panic("User-mode page fault at address %p", (void *)addr);
-	}
-
-	// Find a VMA that covers the faulting address
-	spin_acquire(&vma_lock);
-	vma_list_t *vma = vma_list;
-	while (vma) {
-		if ((uintptr_t)vma->base <= addr && addr < (uintptr_t)vma->base + vma->size)
-			break;
-		vma = vma->next;
-	}
-	spin_release(&vma_lock);
-	if (vma == NULL)
-		panic("Page fault at address %p, no VMA found", (void *)addr);
-
-	// Right now we only handle demand paging, so we will allocate a new page
-	/// TODO: Handle other cases (CoW, file mappings, etc.)
-	/// TODO: Handle flags properly
-	map_page((void *)addr, alloc_page(), PAGE_PRESENT | PAGE_RW | PAGE_NX);
-
-	return frame;
-}
+spinlock_t vma_lock = SPINLOCK_INITIALIZER;
 
 static vma_list_t *alloc_vma(void) {
 	if (vma_free_list) {
@@ -76,20 +45,13 @@ static void free_vma(vma_list_t *vma) {
 
 void vmem_init(void) {
 	// Initialize the VMA list
-	map_page((void *)VMEM_VIRT_BASE, (void *)alloc_page(), PAGE_RW | PAGE_NX);
-	vma_free_list = (vma_list_t *)VMEM_VIRT_BASE;
+	vma_free_list = alloc_page() + hhdm_off;
 	for (size_t i = 1; i < PAGE_SIZE / sizeof(vma_list_t); i++) {
 		vma_list_t *a = &vma_free_list[i - 1];
 		vma_list_t *b = &vma_free_list[i];
 		a->next = b;
 		b->prev = a;
 	}
-
-	// Add initial mappings for kernel heap and stack
-	create_vma((void *)VMEM_STACK_BASE - KERNEL_STACK_SIZE, KERNEL_STACK_SIZE, VMA_READ | VMA_WRITE);
-	create_vma((void *)VMEM_MMIO_BASE, 0, VMA_READ | VMA_WRITE);
-	create_vma((void *)VMEM_VIRT_BASE, PAGE_SIZE, VMA_READ | VMA_WRITE); // One page for the preallocated VMA's
-	create_vma((void *)VMEM_HEAP_BASE, PAGE_SIZE, VMA_READ | VMA_WRITE); // We need at least one page for heap, so might as well allocate it now
 
 	// Finish setting up the BSP stack
 	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
@@ -153,8 +115,53 @@ void destroy_vma(vma_list_t *vma) {
 void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 	uint64_t prev_irq = spin_acquire_irqsave(&vma_lock);
 
+	if (vma_list == NULL) {
+		// First VMA
+		void *addr = start;
+		vma_list = alloc_vma();
+		vma_list->base = addr;
+		vma_list->size = npages * PAGE_SIZE;
+		vma_list->flags = flags;
+		vma_list->next = NULL;
+		vma_list->prev = NULL;
+		spin_release_irqrestore(&vma_lock, prev_irq);
+		return addr;
+	}
+	if (vma_list->next == NULL) {
+		// Only one VMA
+		if (start + npages * PAGE_SIZE <= vma_list->base) {
+			// Allocate before
+			void *addr = start;
+			vma_list_t *new_vma = alloc_vma();
+			new_vma->base = addr;
+			new_vma->size = npages * PAGE_SIZE;
+			new_vma->flags = flags;
+			new_vma->next = vma_list;
+			new_vma->prev = NULL;
+			vma_list->prev = new_vma;
+			vma_list = new_vma;
+			spin_release_irqrestore(&vma_lock, prev_irq);
+			return addr;
+		} else if (vma_list->base + vma_list->size + npages * PAGE_SIZE <= end) {
+			// Allocate after
+			void *addr = (void *)((uintptr_t)vma_list->base + vma_list->size);
+			vma_list_t *new_vma = alloc_vma();
+			new_vma->base = addr;
+			new_vma->size = npages * PAGE_SIZE;
+			new_vma->flags = flags;
+			vma_list->next = new_vma;
+			new_vma->prev = vma_list;
+			new_vma->next = NULL;
+			spin_release_irqrestore(&vma_lock, prev_irq);
+			return addr;
+		} else {
+			// No space
+			panic("Virtual address space exhausted, cannot allocate VMA");
+		}
+	}
+
 	vma_list_t *prev = vma_list;
-	vma_list_t *curr = vma_list->next; // Guaranteed to exist since we always have at least 4 mappings
+	vma_list_t *curr = vma_list->next;
 	while (curr) {
 		if (prev->base + prev->size >= start) {
 			if (prev->base + prev->size + npages * PAGE_SIZE <= curr->base) {
@@ -189,6 +196,20 @@ void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
 		prev = curr;
 		curr = curr->next;
 	}
+	// Allocate at the end if possible
+	if ((uintptr_t)prev->base + prev->size + npages * PAGE_SIZE <= (uintptr_t)end) {
+		void *addr = (void *)((uintptr_t)prev->base + prev->size);
+		vma_list_t *new_vma = alloc_vma();
+		new_vma->base = addr;
+		new_vma->size = npages * PAGE_SIZE;
+		new_vma->flags = flags;
+		prev->next = new_vma;
+		new_vma->prev = prev;
+		new_vma->next = NULL;
+		spin_release_irqrestore(&vma_lock, prev_irq);
+		return addr;
+	}
+
 	// Ran out of space (somehow)
 	panic("Virtual address space exhausted, cannot allocate VMA");
 }
