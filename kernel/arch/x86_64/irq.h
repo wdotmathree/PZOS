@@ -48,15 +48,15 @@ void isr_init(void);
 void register_isr(uint8_t num, isr_handler_t handler, uint8_t dpl);
 void unregister_isr(uint8_t num);
 
-static inline void irq_disable() {
+static inline void irq_disable(void) {
 	asm("cli");
 }
 
-static inline void irq_enable() {
+static inline void irq_enable(void) {
 	asm("sti");
 }
 
-static inline uint64_t irq_save() {
+static inline uint64_t irq_save(void) {
 	uint64_t flags;
 	asm("pushfq; pop %0" : "=r"(flags));
 	return flags;

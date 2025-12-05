@@ -9,6 +9,10 @@
 #include <kernel/spinlock.h>
 #include <kernel/vmem.h>
 
+#define REFCOUNT_MASK 0x1ffULL << 52
+#define REFCOUNT_INC(ptr) (*ptr) += 1ULL << 52
+#define REFCOUNT_DEC(ptr) (*ptr) -= 1ULL << 52
+
 extern vma_list_t *vma_list;
 
 extern spinlock_t vma_lock;
@@ -94,6 +98,7 @@ void map_page(const void *virt_addr, const physaddr_t phys_addr, uint64_t flags)
 	}
 	invlpg(virt);
 	*pte = phys | PAGE_PRESENT | flags;
+	*pte += 1ULL << 52;
 
 	spin_release_irqrestore(&paging_lock, prev_irq);
 }
@@ -104,26 +109,22 @@ void unmap_page(const void *virt_addr) {
 	uint64_t flags = spin_acquire_irqsave(&paging_lock);
 
 	uint64_t *pml4e = (uint64_t *)LINADDR_PML4E_PTR(virt);
-	if ((*pml4e & PAGE_PRESENT) == 0) {
-		spin_release_irqrestore(&paging_lock, flags);
+	if ((*pml4e & PAGE_PRESENT) == 0)
 		goto unmapped;
-	}
 	uint64_t *pdpte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pml4e)) + LINADDR_PDPTE(virt);
-	if ((*pdpte & PAGE_PRESENT) == 0) {
-		spin_release_irqrestore(&paging_lock, flags);
+	if ((*pdpte & PAGE_PRESENT) == 0)
 		goto unmapped;
-	}
 	uint64_t *pde = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pdpte)) + LINADDR_PDE(virt);
-	if ((*pde & PAGE_PRESENT) == 0) {
-		spin_release_irqrestore(&paging_lock, flags);
+	if ((*pde & PAGE_PRESENT) == 0)
 		goto unmapped;
-	}
 	uint64_t *pte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTE(virt);
-	if ((*pte & PAGE_PRESENT) == 0) {
-		spin_release_irqrestore(&paging_lock, flags);
+	if ((*pte & PAGE_PRESENT) == 0)
 		goto unmapped;
-	}
 
+	if (((*pte -= (1ULL << 52)) & (0x1ffULL << 52)) != 0) {
+		spin_release_irqrestore(&paging_lock, flags);
+		return;
+	}
 	*pte = 0;
 	invlpg(virt);
 
@@ -154,6 +155,7 @@ void unmap_page(const void *virt_addr) {
 	return;
 
 unmapped:
+	spin_release_irqrestore(&paging_lock, flags);
 	LOG(__FUNCTION__, "Attempted to unmap non-mapped page at %p", virt);
 }
 
