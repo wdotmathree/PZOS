@@ -1,6 +1,8 @@
 #include <kernel/slab.h>
 
 #include <kernel/mman.h>
+#include <kernel/pageinfo.h>
+#include <kernel/panic.h>
 
 // Min object size is calculated as 2^(SLAB_MIN_ORDER+3)
 #define SLAB_MIN_ORDER 0
@@ -56,7 +58,12 @@ void *slab_alloc(slabinfo_t *slab) {
 	for (uintptr_t offset = slab->obj_size; offset < PAGE_SIZE; offset += slab->obj_size) {
 		*(void **)(slab->free_list + offset - slab->obj_size) = slab->free_list + offset;
 	}
-	*(void **)(slab->free_list + PAGE_SIZE - slab->obj_size) = NULL;
+	*(void **)(slab->free_list + PAGE_SIZE - slab->obj_size * 2) = NULL;
+
+	// Update pageinfo
+	pageinfo_t *info = get_pageinfo(__pa(slab->free_list));
+	info->flags |= PAGEINFO_SLAB;
+	info->slab_owner = slab;
 
 	// Return the first object
 	void *obj = slab->free_list - slab->obj_size;
@@ -81,4 +88,12 @@ void slab_free(slabinfo_t *slab, void *obj) {
 	slab->free_list = obj;
 
 	spin_release(&slab->lock);
+}
+
+void slab_free_unknown(void *obj) {
+	pageinfo_t *info = get_pageinfo(__pa(obj));
+	if (!(info->flags & PAGEINFO_SLAB))
+		panic("slab_free_unknown: invalid free on non-slab object %p", obj);
+
+	slab_free(get_pageinfo(__pa(obj))->slab_owner, obj);
 }

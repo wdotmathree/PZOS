@@ -2,6 +2,7 @@
  * Virtual Map:
  * PML4[0x100-0x17f] 0xffff800000000000-0xffffbfffffffffff: Direct map (64 TiB)
  * PML4[0x190-0x1cf] 0xffffc80000000000-0xffffe7ffffffffff: Kernel virtual area (32 TiB)
+ * PML4[0x1e0-0x1ef] 0xfffff00000000000-0xfffff7ffffffffff: Pageinfo structures (16 TiB)
  * PML4[0x1fd-0x1fd] 0xfffffe8000000000-0xfffffeffffffffff: Framebuffer (512 GiB)
  * PML4[0x1fe-0x1fe] 0xffffff0000000000-0xffffff7fffffffff: Recursive page table mapping (512 GiB)
  * PML4[0x1ff-0x1ff]: +--> 0xffffffff10000000-0xffffffff7fffffff: Kernel modules (1.75 GiB)
@@ -19,13 +20,13 @@
 #ifndef KERNEL_VMEM_H
 #define KERNEL_VMEM_H
 
-#include <kernel/paging.h>
-
 #include <stddef.h>
 #include <stdint.h>
 
 #define VMEM_VIRT_BASE 0xffffc80000000000
 #define VMEM_VIRT_END 0xffffe80000000000
+#define VMEM_PAGEINFO_BASE 0xfffff00000000000
+#define VMEM_PAGEINFO_MAXSIZE (0xfffff80000000000 - VMEM_PAGEINFO_BASE)
 #define VMEM_STACK_BASE 0xfffffffffffff000
 
 #define KERNEL_STACK_SIZE (64 * 1024) // 64 KiB stack size
@@ -33,6 +34,7 @@
 #define VMA_READ 0x1
 #define VMA_WRITE 0x2
 #define VMA_EXEC 0x4
+#define VMA_ZERO 0x8 // Zero pages on allocation
 
 #define PF_PRESENT 0x1
 #define PF_WRITE 0x2

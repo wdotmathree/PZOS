@@ -59,6 +59,9 @@ void vmem_init(void) {
 		map_page(page, alloc_page(), PAGE_RW | PAGE_NX);
 	}
 
+	// Add pageinfo VMA
+	create_vma((void *)VMEM_PAGEINFO_BASE, VMEM_PAGEINFO_MAXSIZE, VMA_READ | VMA_WRITE | VMA_ZERO);
+
 	// Register the page fault handler
 	register_isr(14, page_fault_handler, 0);
 }

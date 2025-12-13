@@ -124,6 +124,7 @@ __attribute__((naked, noreturn)) void kinit(void) {
 	extern uint8_t *tty_buf;
 	mman_init(memory_map_request.response, &tty_buf, hhdm_request.response->offset, (uintptr_t)&_kernel_end);
 	vmem_init();
+	kmalloc_init();
 
 	acpi_init(efi_system_table_request.response ? (void *)efi_system_table_request.response->address : NULL);
 

@@ -30,8 +30,8 @@ static const char *MEM_TYPES[] = {
 
 static const size_t bitmap_size = LOWMEM_SIZE / 0x1000 / 8;
 static uint64_t *bitmap;
-static uint64_t *page_stack;
-static uint64_t *page_stack_base;
+static uint32_t *page_stack;
+static uint32_t *page_stack_base;
 
 uintptr_t hhdm_off;
 
@@ -66,7 +66,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	LOG("MMAN", "Usable memory size: %zu bytes (%zu pages)", mem_size, mem_size / 0x1000);
 
 	// Find candidates for low memory bitmap and high memory page stack
-	size_t reserve = ((max_addr - LOWMEM_SIZE) / 0x1000 * 8 + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
+	size_t reserve = ((max_addr - LOWMEM_SIZE) / 0x1000 * sizeof(*page_stack) + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
 	for (size_t i = 0; i < count; i++) {
 		struct limine_memmap_entry *entry = mmap->entries[i];
 		if (entry->type == LIMINE_MEMMAP_USABLE) {
@@ -99,7 +99,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	}
 
 	// Setup a page stack for high memory (placed right after bitmap)
-	page_stack_base = page_stack = (uint64_t *)((uintptr_t)bitmap + bitmap_size);
+	page_stack_base = page_stack = (uint32_t *)((uintptr_t)bitmap + bitmap_size);
 	page_stack--;
 	for (int i = count - 1; i >= 0; i--) {
 		struct limine_memmap_entry *entry = mmap->entries[i];

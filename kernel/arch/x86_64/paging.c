@@ -38,12 +38,16 @@ isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
 	}
 	spin_release(&vma_lock);
 	if (vma == NULL)
-		panic("Page fault at address %p RIP %p, no VMA found", (void *)addr, frame->isr_rip);
+		panic("Page fault at address %p RIP %p no VMA found", (void *)addr, frame->isr_rip);
 
 	// Right now we only handle demand paging, so we will allocate a new page
 	/// TODO: Handle other cases (CoW, file mappings, etc.)
 	/// TODO: Handle flags properly
 	map_page((void *)addr, alloc_page(), PAGE_PRESENT | PAGE_RW | PAGE_NX);
+
+	if (vma->flags & VMA_ZERO) {
+		memset((void *)((uintptr_t)addr & ~(PAGE_SIZE - 1)), 0, PAGE_SIZE);
+	}
 
 	return frame;
 }
@@ -96,9 +100,9 @@ void map_page(const void *virt_addr, const physaddr_t phys_addr, uint64_t flags)
 	} else {
 		*pde += 1ULL << 52;
 	}
-	invlpg(virt);
 	*pte = phys | PAGE_PRESENT | flags;
 	*pte += 1ULL << 52;
+	invlpg(virt);
 
 	spin_release_irqrestore(&paging_lock, prev_irq);
 }
