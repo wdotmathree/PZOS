@@ -6,6 +6,8 @@
 #error "This file should only be included on x86_64 architecture."
 #endif
 
+#include <kernel/defines.h>
+
 #include <isr.h>
 
 #define PAGE_SIZE 0x1000
@@ -34,10 +36,10 @@
 #define PAGE_TYPE(x) (((((x) >> 2) & 1) * PAGE_PAT) | ((((x) >> 1) & 1) * PAGE_PCD) | (((x) & 1) * PAGE_PWT))
 
 // Address conversion macros
-#define LINADDR_PML4E(addr) (((addr) >> 39) & 0x1ff)
-#define LINADDR_PDPTE(addr) (((addr) >> 30) & 0x1ff)
-#define LINADDR_PDE(addr) (((addr) >> 21) & 0x1ff)
-#define LINADDR_PTE(addr) (((addr) >> 12) & 0x1ff)
+#define LINADDR_PML4I(addr) (((addr) >> 39) & 0x1ff)
+#define LINADDR_PDPTI(addr) (((addr) >> 30) & 0x1ff)
+#define LINADDR_PDI(addr) (((addr) >> 21) & 0x1ff)
+#define LINADDR_PTI(addr) (((addr) >> 12) & 0x1ff)
 #define LINADDR_OFF(addr) ((addr) & 0xfff)
 #define TABLE_ENTRY_ADDR(entry) ((entry) & 0x000ffffffffff000)
 #define BUILD_LINADDR(pml4, pdpt, pd, pt, offset) \
@@ -63,5 +65,13 @@
 				 : : : "rax", "memory")
 
 isr_frame_t *page_fault_handler(isr_frame_t *const frame);
+
+enum map_size {
+	MAP_SIZE_4K = 0,
+	MAP_SIZE_2M = 1,
+	MAP_SIZE_1G = 2,
+};
+
+void early_map(uint64_t *pml4, const void *virt_addr, const physaddr_t phys_addr, enum map_size size, uint64_t flags);
 
 #endif

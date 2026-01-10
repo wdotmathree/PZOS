@@ -52,18 +52,18 @@ void vmem_init(void) {
 		b->prev = a;
 	}
 
+	// Set up the pageinfo VMA
+	create_vma((void *)VMEM_PAGEINFO_BASE, VMEM_PAGEINFO_MAXSIZE, VMA_READ | VMA_WRITE | VMA_ZERO);
+
+	// Register the page fault handler
+	register_isr(14, page_fault_handler, 0);
+
 	// Finish setting up the BSP stack
 	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
 	for (size_t i = 0; i < KERNEL_STACK_SIZE - PAGE_SIZE; i += PAGE_SIZE) {
 		void *page = (void *)(kernel_stack_bottom + i);
 		map_page(page, alloc_page(), PAGE_RW | PAGE_NX);
 	}
-
-	// Add pageinfo VMA
-	create_vma((void *)VMEM_PAGEINFO_BASE, VMEM_PAGEINFO_MAXSIZE, VMA_READ | VMA_WRITE | VMA_ZERO);
-
-	// Register the page fault handler
-	register_isr(14, page_fault_handler, 0);
 }
 
 void create_vma(void *base, size_t size, uint64_t flags) {

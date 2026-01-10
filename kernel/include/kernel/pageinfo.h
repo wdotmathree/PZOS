@@ -13,10 +13,12 @@ enum pageinfo_flags : uint64_t {
 	PAGEINFO_ALLOCATED = 0x1,
 	PAGEINFO_SLAB = 0x2,
 	PAGEINFO_RESERVED = 0x4,
+	_MAX_PAGEINFO_FLAGS = 0xffffffffffffffff,
 };
 
 typedef struct pageinfo {
 	enum pageinfo_flags flags;
+	uint32_t refcount;
 
 	union {
 		struct {
@@ -24,7 +26,7 @@ typedef struct pageinfo {
 		};
 
 		struct {
-			uint8_t __padding[24];
+			uint8_t __padding[52];
 		};
 	};
 } pageinfo_t;

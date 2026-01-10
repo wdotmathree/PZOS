@@ -9,6 +9,7 @@
 
 #include <kernel/defines.h>
 #include <kernel/log.h>
+#include <kernel/pageinfo.h>
 #include <kernel/paging.h>
 #include <kernel/panic.h>
 #include <kernel/spinlock.h>
@@ -39,6 +40,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	// Usable and bootloader reclaimable chunks are guaranteed to not overlap and are page aligned
 	size_t count = mmap->entry_count;
 	size_t max_addr = 0;
+	size_t max_free = 0;
 
 	uintptr_t framebuf_base = 0;
 	intptr_t framebuf_size = 0;
@@ -53,6 +55,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		LOG("MMAN", "base=%p size=%p type=%s", entry->base, entry->length, MEM_TYPES[entry->type]);
 		if (entry->type == LIMINE_MEMMAP_USABLE || entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
 			mem_size += entry->length;
+			max_free = entry->base + entry->length - 1;
 		} else if (entry->type == LIMINE_MEMMAP_FRAMEBUFFER) {
 			// We only use the first framebuffer
 			if (framebuf_base == 0) {
@@ -66,7 +69,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	LOG("MMAN", "Usable memory size: %zu bytes (%zu pages)", mem_size, mem_size / 0x1000);
 
 	// Find candidates for low memory bitmap and high memory page stack
-	size_t reserve = ((max_addr - LOWMEM_SIZE) / 0x1000 * sizeof(*page_stack) + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
+	size_t reserve = ((max_free - LOWMEM_SIZE) / 0x1000 * sizeof(*page_stack) + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
 	for (size_t i = 0; i < count; i++) {
 		struct limine_memmap_entry *entry = mmap->entries[i];
 		if (entry->type == LIMINE_MEMMAP_USABLE) {
@@ -124,44 +127,27 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	memset(pml4, 0, 0x1000);
 
 	// Map top page of kernel stack
-	uint64_t *pdpt = (uint64_t *)(hhdm_off + alloc_page());
-	pml4[0x1ff] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW;
-	memset(pdpt, 0, 0x1000);
-	uint64_t *pd = (uint64_t *)(hhdm_off + alloc_page());
-	pdpt[0x1ff] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-	memset(pd, 0, 0x1000);
-	uint64_t *pt = (uint64_t *)(hhdm_off + alloc_page());
-	pd[0x1ff] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-	memset(pt, 0, 0x1000);
-	uintptr_t stack_base = 0;
+	uintptr_t stack_base;
 	asm("mov %0, [rbp]" : "=r"(stack_base));
-	pt[0x1fe] = (stack_base - 0x1000 - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+	early_map(pml4, (void *)(VMEM_STACK_BASE - 0x1000), __pa(stack_base - 0x1000), MAP_SIZE_4K, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB));
 
 	// Map framebuffer
 	uintptr_t ptr = framebuf_base;
-	uintptr_t vptr = 0xfffffe8000000000;
-	pdpt = (uint64_t *)(hhdm_off + alloc_page());
-	pml4[0x1fd] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-	memset(pdpt, 0, 0x1000);
-	pd = (uint64_t *)(hhdm_off + alloc_page());
-	pdpt[0x000] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-	memset(pd, 0, 0x1000);
-	if ((ptr & 0x1fffff) == 0) {
-		// Framebuffer is large page aligned
-		while (framebuf_size >= 0x200000) {
-			pd[LINADDR_PDE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WC);
-			ptr += 0x200000;
-			vptr += 0x200000;
-			framebuf_size -= 0x200000;
-		}
+	void *vptr = (void *)0xfffffe8000000000;
+	while (ptr & 0x1fffff || framebuf_size < 0x200000) {
+		early_map(pml4, vptr, ptr, MAP_SIZE_4K, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WC));
+		ptr += 0x1000;
+		vptr += 0x1000;
+		framebuf_size -= 0x1000;
+	}
+	while ((ptr & 0x1fffff) == 0 && framebuf_size >= 0x200000) {
+		early_map(pml4, vptr, ptr, MAP_SIZE_2M, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WC));
+		ptr += 0x200000;
+		vptr += 0x200000;
+		framebuf_size -= 0x200000;
 	}
 	while (framebuf_size > 0) {
-		if (pd[LINADDR_PDE(vptr)] == 0) {
-			pt = (uint64_t *)(hhdm_off + alloc_page());
-			pd[LINADDR_PDE(vptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-			memset(pt, 0, 0x1000);
-		}
-		pt[LINADDR_PTE(vptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WC);
+		early_map(pml4, vptr, ptr, MAP_SIZE_4K, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WC));
 		ptr += 0x1000;
 		vptr += 0x1000;
 		framebuf_size -= 0x1000;
@@ -177,15 +163,15 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 
 	// Map kernel executable
 	// Go through old page tables and copy
-	pdpt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(pml4[0x1ff]));
-	pd = (uint64_t *)(hhdm_off + alloc_page());
+	uint64_t *pdpt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(pml4[0x1ff]));
+	uint64_t *pd = (uint64_t *)(hhdm_off + alloc_page());
 	pdpt[0x1fe] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW;
 	memset(pd, 0, 0x1000);
 	uint64_t *old_pdpt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pml4[0x1ff]));
 	uint64_t *old_pd = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pdpt[0x1fe]));
 	for (size_t j = 0; j < 512; j++) {
 		if (old_pd[j] & PAGE_PRESENT) {
-			pt = (uint64_t *)(hhdm_off + alloc_page());
+			uint64_t *pt = (uint64_t *)(hhdm_off + alloc_page());
 			pd[j] = ((uintptr_t)pt - hhdm_off) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
 			memset(pt, 0, 0x1000);
 			uint64_t *old_pt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pd[j]));
@@ -206,82 +192,27 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 
 		// Pad to 2MiB
 		while (ptr & 0x1fffff && end - ptr >= 0x1000) {
-			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
-				pdpt = (uint64_t *)(hhdm_off + alloc_page());
-				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pdpt, 0, 0x1000);
-			}
-			if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
-				pd = (uint64_t *)(hhdm_off + alloc_page());
-				pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pd, 0, 0x1000);
-			}
-			if (pd[LINADDR_PDE(ptr)] == 0) {
-				pt = (uint64_t *)(hhdm_off + alloc_page());
-				pd[LINADDR_PDE(ptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pt, 0, 0x1000);
-			}
-			pt[LINADDR_PTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+			early_map(pml4, __va(ptr), ptr, MAP_SIZE_4K, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB));
 			ptr += 0x1000;
 		}
 
 		// Pad to 1GiB
 		while (ptr & 0x3fffffff && end - ptr >= 0x200000) {
-			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
-				pdpt = (uint64_t *)(hhdm_off + alloc_page());
-				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pdpt, 0, 0x1000);
-			}
-			if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
-				pd = (uint64_t *)(hhdm_off + alloc_page());
-				pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pd, 0, 0x1000);
-			}
-			pd[LINADDR_PDE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WB);
+			early_map(pml4, __va(ptr), ptr, MAP_SIZE_2M, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB));
 			ptr += 0x200000;
 		}
 
 		// Map remaining pages
 		while (end - ptr >= 0x40000000) {
-			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
-				pdpt = (uint64_t *)(hhdm_off + alloc_page());
-				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pdpt, 0, 0x1000);
-			}
-			pdpt[LINADDR_PDPTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WB);
+			early_map(pml4, __va(ptr), ptr, MAP_SIZE_1G, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB));
 			ptr += 0x40000000;
 		}
 		while (end - ptr >= 0x200000) {
-			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
-				pdpt = (uint64_t *)(hhdm_off + alloc_page());
-				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pdpt, 0, 0x1000);
-			}
-			if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
-				pd = (uint64_t *)(hhdm_off + alloc_page());
-				pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pd, 0, 0x1000);
-			}
-			pd[LINADDR_PDE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PS | PAGE_TYPE(PAT_WB);
+			early_map(pml4, __va(ptr), ptr, MAP_SIZE_2M, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB));
 			ptr += 0x200000;
 		}
 		while (end - ptr >= 0x1000) {
-			if (pml4[0x100 + LINADDR_PML4E(ptr)] == 0) {
-				pdpt = (uint64_t *)(hhdm_off + alloc_page());
-				pml4[0x100 + LINADDR_PML4E(ptr)] = ((uintptr_t)pdpt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pdpt, 0, 0x1000);
-			}
-			if (pdpt[LINADDR_PDPTE(ptr)] == 0) {
-				pd = (uint64_t *)(hhdm_off + alloc_page());
-				pdpt[LINADDR_PDPTE(ptr)] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pd, 0, 0x1000);
-			}
-			if (pd[LINADDR_PDE(ptr)] == 0) {
-				pt = (uint64_t *)(hhdm_off + alloc_page());
-				pd[LINADDR_PDE(ptr)] = ((uintptr_t)pt - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX;
-				memset(pt, 0, 0x1000);
-			}
-			pt[LINADDR_PTE(ptr)] = ptr | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB);
+			early_map(pml4, __va(ptr), ptr, MAP_SIZE_4K, PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_WB));
 			ptr += 0x1000;
 		}
 	}
@@ -356,32 +287,41 @@ void free_page(void *ptr) {
 	spin_release_irqrestore(&alloc_lock, flags);
 }
 
-physaddr_t alloc_contig(size_t npages) {
+/// TODO: Fix
+physaddr_t alloc_aligned(size_t npages, size_t align) {
 	if (npages == 0)
 		return 0;
 
 	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
 
 	// We always allocate from low memory so we can use the bitmap
-	size_t cnt = 0;
 	uint64_t mask = 1;
-	for (size_t i = 0; i < bitmap_size * 8; i++) {
-		if (bitmap[i / 64] & mask) {
-			if (++cnt == npages) {
-				// We found a contiguous block of pages
-				for (size_t j = 0; j < npages; j++) {
-					bitmap[(i - cnt + j) / 64] &= ~(1ULL << ((i - cnt + j) % 64));
-				}
+	for (size_t i = 0; i < bitmap_size * 8; i += align) {
+		size_t cnt = 0;
+		for (size_t j = i; cnt < npages; j++) {
+			if (bitmap[j / 64] & mask) {
+				if (++cnt == npages) {
+					// We found a contiguous block of pages
+					for (size_t k = i; k <= j; k++) {
+						bitmap[k / 64] &= ~(1ULL << (k % 64));
+					}
 
-				spin_release_irqrestore(&alloc_lock, flags);
-				return (i - cnt + 1) * 0x1000;
+					spin_release_irqrestore(&alloc_lock, flags);
+					return i * 0x1000;
+				}
+			} else {
+				i = j;
+				break;
 			}
-		} else {
-			cnt = 0;
+			mask = (mask << 1) | (mask >> 63);
 		}
-		asm("rol %0, 1" : "+r"(mask));
+		mask = (mask << (align)) | (mask >> (64 - align));
 	}
-	panic("alloc_contig: Not enough contiguous pages available");
+	panic("alloc_aligned: Not enough contiguous pages available");
+}
+
+physaddr_t alloc_contig(size_t npages) {
+	return alloc_aligned(npages, 1);
 }
 
 void free_contig(void *ptr, size_t npages) {

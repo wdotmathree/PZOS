@@ -5,7 +5,7 @@ export AR := /opt/cross/bin/x86_64-elf-ar
 export CC := /opt/cross/bin/x86_64-elf-gcc
 export ARCH := x86_64
 
-QEMU_FLAGS := -cpu max -m 5G -drive file=PZOS.bin,format=raw,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm
+QEMU_FLAGS := -cpu max -m 4G -drive file=PZOS.bin,format=raw,if=none,id=nvm -device nvme,serial=deadbeef,drive=nvm
 QEMU_FLAGS += -device pcie-root-port,port=0x8,chassis=1,id=pci.1 -device pcie-root-port,port=0x9,chassis=2,id=pci.2,bus=pci.1 -device e1000,bus=pci.1 -device qemu-xhci,id=xhci,bus=pci.2
 
 img:
