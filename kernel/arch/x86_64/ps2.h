@@ -4,7 +4,7 @@
 
 #include <stdint.h>
 
-#include <x86_64/isr.h>
+#include <x86_64/irq.h>
 
 void ps2_send_ctrl(uint8_t byte);
 void ps2_send_ctrl_long(uint8_t first, uint8_t second);

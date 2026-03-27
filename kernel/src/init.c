@@ -51,7 +51,7 @@ static volatile struct limine_efi_system_table_request efi_system_table_request 
 __attribute__((used, section(".limine_requests_end"))) //
 static volatile LIMINE_REQUESTS_END_MARKER;
 
-extern void _kernel_end;
+extern void *_kernel_end;
 
 __attribute__((noreturn)) void kmain(tty_dim_t);
 

@@ -7,7 +7,7 @@
 
 #include <kernel/acpi.h>
 
-#define PCI_ID_ANY (-1)
+#define PCI_ID_ANY ((uint32_t)-1)
 
 #define PCI_CMD_IO_SPACE 0x01
 #define PCI_CMD_MEM_SPACE 0x02

@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <x86_64/isr.h>
+#include <x86_64/irq.h>
 
 #include <kernel/mman.h>
 #include <kernel/paging.h>

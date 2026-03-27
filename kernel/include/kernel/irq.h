@@ -2,7 +2,7 @@
 #ifndef KERNEL_ISR_H
 #define KERNEL_ISR_H
 
-#include_next <isr.h>
+#include_next <irq.h>
 
 static void irq_disable();
 static void irq_enable();

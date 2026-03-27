@@ -4,7 +4,7 @@
 
 #include <stdatomic.h>
 
-#include <kernel/isr.h>
+#include <kernel/irq.h>
 
 typedef struct {
 	volatile uint32_t locked;

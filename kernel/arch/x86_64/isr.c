@@ -1,4 +1,4 @@
-#include <x86_64/isr.h>
+#include <x86_64/irq.h>
 
 #include <stddef.h>
 #include <stdio.h>
@@ -64,7 +64,7 @@ void isr_init(void) {
 				 : : "m"(gdtr) : "rax", "memory");
 
 	// Populate our IDT
-	extern void isr_stub_0;
+	extern void *isr_stub_0;
 	for (int i = 0; i < IDT_SIZE; i++) {
 		uintptr_t stub_addr = (uintptr_t)&isr_stub_0 + i * 16;
 		struct idt_entry *entry = &idt[i];

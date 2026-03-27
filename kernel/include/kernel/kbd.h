@@ -27,12 +27,13 @@ enum KeyCode {
 };
 // clang-format on
 
-enum KeyFlags {
+enum KeyFlags : uint8_t {
 	KeyFlag_None = 0,
 	KeyFlag_Released = 1 << 0,
 	KeyFlag_Control = 1 << 1,
 	KeyFlag_Shift = 1 << 2,
 	KeyFlag_Alt = 1 << 3,
+	KeyFlag_Invalid = 1 << 7,
 };
 
 typedef struct {

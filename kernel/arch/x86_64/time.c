@@ -3,7 +3,7 @@
 #include <stddef.h>
 
 #include <x86_64/intrin.h>
-#include <x86_64/isr.h>
+#include <x86_64/irq.h>
 
 #include <kernel/log.h>
 

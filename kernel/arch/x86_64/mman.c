@@ -196,7 +196,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	}
 
 	// Direct map USABLE and BOOTLOADER_RECLAIMABLE memory as WB
-	for (int i = 0; i < count; i++) {
+	for (size_t i = 0; i < count; i++) {
 		struct limine_memmap_entry *entry = mmap->entries[i];
 		if (entry->type != LIMINE_MEMMAP_USABLE && entry->type != LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE)
 			continue;

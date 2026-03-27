@@ -6,7 +6,7 @@
 #error "This file should only be included on x86_64 architecture."
 #endif
 
-#include <x86_64/isr.h>
+#include <x86_64/irq.h>
 
 #define panic(args...)                                \
 	do {                                              \

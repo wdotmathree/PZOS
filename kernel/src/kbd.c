@@ -187,7 +187,7 @@ keystroke_t kbd_read(void) {
 	uint64_t flags = spin_acquire_irqsave(&kbd_lock);
 	if (rbuf_widx == rbuf_ridx) {
 		spin_release_irqrestore(&kbd_lock, flags);
-		return (keystroke_t){0xff};
+		return (keystroke_t){Key_Invalid, KeyFlag_Invalid, 0};
 	}
 	keystroke_t k = rbuf[rbuf_ridx++];
 	spin_release_irqrestore(&kbd_lock, flags);
