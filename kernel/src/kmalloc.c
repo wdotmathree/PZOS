@@ -2,7 +2,7 @@
 
 #include <kernel/slab.h>
 
-#define KMALLOC_NUM_SLABS (sizeof(sizes) / sizeof(sizes[0]))
+#define KMALLOC_NUM_SLABS (sizeof(sizes) / sizeof(*sizes))
 
 static const int sizes[] = {
 	8,
@@ -47,5 +47,5 @@ void *kmalloc(size_t size) {
 }
 
 void kfree(void *ptr) {
-	slab_free_unknown(ptr);
+	slab_free(ptr);
 }

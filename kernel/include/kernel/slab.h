@@ -19,8 +19,8 @@ slabinfo_t *slab_create(size_t obj_size, const char *name);
 
 void *slab_alloc(slabinfo_t *slab);
 void *slab_zalloc(slabinfo_t *slab);
-void slab_free(slabinfo_t *slab, void *obj);
-void slab_free_unknown(void *obj);
+void slab_free2(slabinfo_t *slab, void *obj);
+void slab_free(void *obj);
 
 /// TODO: Reclaim all reclaimable pages in the slab back to the system
 // void slab_reclaim(slabinfo_t *slab);

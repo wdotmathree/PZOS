@@ -80,7 +80,7 @@ void *slab_zalloc(slabinfo_t *slab) {
 	return obj;
 }
 
-void slab_free(slabinfo_t *slab, void *obj) {
+void slab_free2(slabinfo_t *slab, void *obj) {
 	spin_acquire(&slab->lock);
 
 	// Add the object back to the free list
@@ -90,10 +90,10 @@ void slab_free(slabinfo_t *slab, void *obj) {
 	spin_release(&slab->lock);
 }
 
-void slab_free_unknown(void *obj) {
+void slab_free(void *obj) {
 	pageinfo_t *info = get_pageinfo(__pa(obj));
 	if (!(info->flags & PAGEINFO_SLAB))
-		panic("slab_free_unknown: invalid free on non-slab object %p", obj);
+		panic("slab_free: invalid free on non-slab object %p", obj);
 
-	slab_free(get_pageinfo(__pa(obj))->slab_owner, obj);
+	slab_free2(get_pageinfo(__pa(obj))->slab_owner, obj);
 }

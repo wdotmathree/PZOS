@@ -19,7 +19,7 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 	ACPI_RSDP *rsdp = NULL;
 
 	if (system_table == NULL) {
-		map_page((void *)hhdm_off, 0, PAGE_NX | PAGE_TYPE(PAT_WB));
+		map_page(__va(0), 0, PAGE_NX | PAGE_TYPE(PAT_WB));
 		uint64_t search_string = 0x2052545020445352; // "RSD PTR "
 
 		uint16_t *ebda_seg = (uint16_t *)__va(0x040e); // EBDA segment address
@@ -37,7 +37,7 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 				}
 			}
 		}
-		unmap_page((void *)hhdm_off);
+		unmap_page(__va(0));
 
 		if (rsdp == NULL) {
 			for (physaddr_t addr = 0xe0000; addr < 0x100000; addr += 0x1000)

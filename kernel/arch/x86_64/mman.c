@@ -75,7 +75,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		if (entry->type == LIMINE_MEMMAP_USABLE) {
 			if (entry->base + entry->length > max(entry->base, LOWMEM_SIZE) + reserve * 0x1000) {
 				LOG("MMAN", "Reserving %zu pages for memory management structures at %p", reserve, entry->base);
-				bitmap = (uint64_t *)(max(entry->base, LOWMEM_SIZE) + hhdm_off);
+				bitmap = __va(max(entry->base, LOWMEM_SIZE));
 				break;
 			}
 		}
@@ -111,7 +111,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 			size_t end_page = (entry->base + entry->length - 1) / 0x1000;
 			for (size_t j = end_page; j >= max(start_page, LOWMEM_SIZE / 0x1000); j--) {
 				// Skip the pages we reserved for memory management
-				if (j == ((uintptr_t)bitmap - hhdm_off) / 0x1000 + reserve - 1) {
+				if (j == __pa(bitmap) / 0x1000 + reserve - 1) {
 					j -= reserve;
 					if (j < max(start_page, LOWMEM_SIZE / 0x1000))
 						continue;
@@ -123,7 +123,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 
 	// Now that we can allocate pages, make the page tables
 	// We have to allocate and map manually for now until we switch to our new page tables
-	uint64_t *pml4 = (uint64_t *)(hhdm_off + alloc_page());
+	uint64_t *pml4 = __va(alloc_page());
 	memset(pml4, 0, 0x1000);
 
 	// Map top page of kernel stack
@@ -154,27 +154,27 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	}
 
 	// Recursive page table entry
-	pml4[0x1fe] = ((uintptr_t)pml4 - hhdm_off) | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PWT;
+	pml4[0x1fe] = __pa(pml4) | PAGE_PRESENT | PAGE_RW | PAGE_NX | PAGE_PWT;
 
 	// Find old page tables for kernel mappings
 	uint64_t *old_pml4;
 	asm("mov %0, cr3" : "=r"(old_pml4));
-	old_pml4 = (uint64_t *)(hhdm_off + (uintptr_t)old_pml4);
+	old_pml4 = __va(old_pml4);
 
 	// Map kernel executable
 	// Go through old page tables and copy
-	uint64_t *pdpt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(pml4[0x1ff]));
-	uint64_t *pd = (uint64_t *)(hhdm_off + alloc_page());
-	pdpt[0x1fe] = ((uintptr_t)pd - hhdm_off) | PAGE_PRESENT | PAGE_RW;
+	uint64_t *pdpt = __va(TABLE_ENTRY_ADDR(pml4[0x1ff]));
+	uint64_t *pd = __va(alloc_page());
+	pdpt[0x1fe] = __pa(pd) | PAGE_PRESENT | PAGE_RW;
 	memset(pd, 0, 0x1000);
-	uint64_t *old_pdpt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pml4[0x1ff]));
-	uint64_t *old_pd = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pdpt[0x1fe]));
+	uint64_t *old_pdpt = __va(TABLE_ENTRY_ADDR(old_pml4[0x1ff]));
+	uint64_t *old_pd = __va(TABLE_ENTRY_ADDR(old_pdpt[0x1fe]));
 	for (size_t j = 0; j < 512; j++) {
 		if (old_pd[j] & PAGE_PRESENT) {
-			uint64_t *pt = (uint64_t *)(hhdm_off + alloc_page());
-			pd[j] = ((uintptr_t)pt - hhdm_off) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
+			uint64_t *pt = __va(alloc_page());
+			pd[j] = __pa(pt) | (old_pd[j] & (PAGE_PRESENT | PAGE_RW | PAGE_PWT | PAGE_PCD | PAGE_PS | PAGE_NX));
 			memset(pt, 0, 0x1000);
-			uint64_t *old_pt = (uint64_t *)(hhdm_off + TABLE_ENTRY_ADDR(old_pd[j]));
+			uint64_t *old_pt = __va(TABLE_ENTRY_ADDR(old_pd[j]));
 			for (size_t k = 0; k < 512; k++) {
 				pt[k] = old_pt[k] & ~(PAGE_USER | PAGE_ACCESSED | PAGE_DIRTY);
 			}
@@ -222,10 +222,10 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	asm("add rsp, %0\n\t"
 		"add rbp, %0\n\t"
 		"mov cr3, %1" : : "g"(VMEM_STACK_BASE - stack_base),
-						  "r"((uintptr_t)pml4 - hhdm_off), "n"(KERNEL_CS));
+						  "r"(__pa(pml4)), "n"(KERNEL_CS));
 
 	LOG("MMAN", "Page tables initialized successfully.");
-	LOG("MMAN", "PML4 is at %p", (uintptr_t)pml4 - hhdm_off);
+	LOG("MMAN", "PML4 is at %p", __pa(pml4));
 
 	// Reclaim bootloader reclaimable memory
 	for (size_t i = 0; i < count; i++) {
