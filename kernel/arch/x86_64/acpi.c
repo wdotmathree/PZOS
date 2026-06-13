@@ -57,6 +57,9 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 					}
 				}
 			}
+
+			for (physaddr_t addr = 0xe0000; addr < 0x100000; addr += 0x1000)
+				unmap_page((void *)__va(addr));
 		}
 
 		if (rsdp != NULL)
@@ -64,7 +67,7 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 	} else {
 		map_page(__va((physaddr_t)system_table), (physaddr_t)system_table, PAGE_NX | PAGE_TYPE(PAT_WB));
 		system_table = (EFI_SYSTEM_TABLE *)__va((physaddr_t)system_table);
-		uintptr_t end_addr = (uintptr_t)system_table + system_table->Hdr.HeaderSize + system_table->NumberOfTableEntries * sizeof(EFI_CONFIGURATION_TABLE);
+		uintptr_t end_addr = (uintptr_t)system_table + system_table->Hdr.HeaderSize;
 		for (uintptr_t addr = (uintptr_t)system_table & -0x1000; addr < end_addr; addr += 0x1000)
 			map_page((void *)addr, __pa(addr), PAGE_NX | PAGE_TYPE(PAT_WB));
 
@@ -72,6 +75,10 @@ void acpi_init(EFI_SYSTEM_TABLE *system_table) {
 		EFI_GUID guid = EFI_ACPI_20_TABLE_GUID;
 		uint64_t *search_term = (uint64_t *)&guid;
 		EFI_CONFIGURATION_TABLE *tables = (void *)__va(system_table->ConfigurationTable);
+		end_addr = (uintptr_t)tables + system_table->NumberOfTableEntries * sizeof(EFI_CONFIGURATION_TABLE);
+		for (uintptr_t addr = (uintptr_t)tables & -0x1000; addr < end_addr; addr += 0x1000)
+			map_page((void *)addr, __pa(addr), PAGE_NX | PAGE_TYPE(PAT_WB));
+
 		for (size_t i = 0; i < system_table->NumberOfTableEntries; i++) {
 			if (((uint64_t *)&tables[i].VendorGuid)[0] == search_term[0] &&
 				((uint64_t *)&tables[i].VendorGuid)[1] == search_term[1]) {
