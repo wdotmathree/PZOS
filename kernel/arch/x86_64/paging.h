@@ -8,7 +8,7 @@
 
 #include <kernel/defines.h>
 
-#include <isr.h>
+#include <irq.h>
 
 #define PAGE_SIZE 0x1000
 #define PAGE_SHIFT 12
