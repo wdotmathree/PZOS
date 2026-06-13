@@ -18,12 +18,16 @@ enum pageinfo_flags : uint64_t {
 
 typedef struct pageinfo {
 	enum pageinfo_flags flags;
-	uint32_t refcount;
+	_Atomic uint32_t refcount;
 
 	union {
 		struct {
-			void *slab_owner;
-		};
+			void *owner;
+		} slab;
+
+		struct {
+			size_t npages;
+		} kmalloc;
 
 		struct {
 			uint8_t __padding[52];

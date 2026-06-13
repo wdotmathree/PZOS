@@ -1,6 +1,8 @@
 #include <kernel/kmalloc.h>
 
+#include <kernel/pageinfo.h>
 #include <kernel/slab.h>
+#include <kernel/vmem.h>
 
 #define KMALLOC_NUM_SLABS (sizeof(sizes) / sizeof(*sizes))
 
@@ -14,7 +16,6 @@ static const int sizes[] = {
 	512,
 	1024,
 	2048,
-	4096,
 };
 
 static const char *size_names[] = {
@@ -27,7 +28,6 @@ static const char *size_names[] = {
 	"kmalloc-512",
 	"kmalloc-1k",
 	"kmalloc-2k",
-	"kmalloc-4k",
 };
 
 slabinfo_t *kmalloc_slabs[KMALLOC_NUM_SLABS];
@@ -43,9 +43,13 @@ void *kmalloc(size_t size) {
 		if (size <= sizes[i])
 			return slab_alloc(kmalloc_slabs[i]);
 	}
-	return NULL;
+	return vmalloc((size + PAGE_SIZE - 1) / PAGE_SIZE, VMA_READ | VMA_WRITE);
 }
 
 void kfree(void *ptr) {
-	slab_free(ptr);
+	pageinfo_t *info = get_pageinfo(__pa(ptr));
+	if (info->flags & PAGEINFO_SLAB)
+		slab_free(ptr);
+	else
+		vfree(ptr, info->kmalloc.npages);
 }

@@ -10,8 +10,8 @@
 typedef struct slabinfo {
 	size_t obj_size;
 	void *free_list;
-	spinlock_t lock;
 	char *name;
+	spinlock_t lock;
 } slabinfo_t;
 
 slabinfo_t *slab_create(size_t obj_size, const char *name);

@@ -38,17 +38,16 @@ isr_frame_t *page_fault_handler(isr_frame_t *const frame) {
 		panic("Page fault at address %p RIP %p no VMA found", (void *)addr, frame->isr_rip);
 
 	// Right now we only handle demand paging, so we will allocate a new page
-	/// TODO: Handle other cases (CoW, file mappings, etc.)
-	/// TODO: Handle flags properly
-	early_map(NULL, (void *)addr, alloc_page(), MAP_SIZE_4K, PAGE_PRESENT | PAGE_RW | PAGE_NX);
+	if (vma->base == VMEM_PAGEINFO_BASE) {
+		early_map(NULL, addr, alloc_page(), MAP_SIZE_4K, PAGE_PRESENT | PAGE_RW | PAGE_NX);
+	} else {
+		map_page(addr, alloc_page(), PAGE_PRESENT | PAGE_RW | PAGE_NX);
+	}
+
 	if (vma->flags & VMA_ZERO) {
 		// Zero the newly allocated page
 		void *page_base = (void *)((uintptr_t)addr & ~(PAGE_SIZE - 1));
 		memset(page_base, 0, PAGE_SIZE);
-	}
-
-	if (vma->flags & VMA_ZERO) {
-		memset((void *)((uintptr_t)addr & ~(PAGE_SIZE - 1)), 0, PAGE_SIZE);
 	}
 
 	return frame;
@@ -235,7 +234,7 @@ bool is_mapped(const void *virt_addr) {
 		return false;
 	}
 
-	uint64_t *pdpte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pml4e));
+	uint64_t *pdpte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pml4e)) + LINADDR_PDPTI(virt);
 	if ((*pdpte & PAGE_PRESENT) == 0) {
 		spin_release_irqrestore(&paging_lock, flags);
 		return false;
@@ -245,7 +244,7 @@ bool is_mapped(const void *virt_addr) {
 		return true;
 	}
 
-	uint64_t *pde = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pdpte));
+	uint64_t *pde = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pdpte)) + LINADDR_PDI(virt);
 	if ((*pde & PAGE_PRESENT) == 0) {
 		spin_release_irqrestore(&paging_lock, flags);
 		return false;
@@ -255,7 +254,7 @@ bool is_mapped(const void *virt_addr) {
 		return true;
 	}
 
-	uint64_t *pte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pde));
+	uint64_t *pte = (uint64_t *)__va(TABLE_ENTRY_ADDR(*pde)) + LINADDR_PTI(virt);
 	spin_release_irqrestore(&paging_lock, flags);
 	return *pte & PAGE_PRESENT;
 }

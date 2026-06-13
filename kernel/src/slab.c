@@ -15,7 +15,7 @@ static slabinfo_t global_slab = {
 };
 
 slabinfo_t *slab_create(size_t obj_size, const char *name) {
-	if (obj_size == 0 || obj_size > PAGE_SIZE)
+	if (obj_size == 0 || obj_size > PAGE_SIZE / 2)
 		return NULL;
 
 	slabinfo_t *slab = (slabinfo_t *)slab_alloc(&global_slab);
@@ -44,30 +44,24 @@ slabinfo_t *slab_create(size_t obj_size, const char *name) {
 void *slab_alloc(slabinfo_t *slab) {
 	spin_acquire(&slab->lock);
 
-	if (slab->free_list) {
-		// Reuse an object from the free list
-		void *obj = slab->free_list;
-		slab->free_list = *(void **)obj;
-		spin_release(&slab->lock);
-		return obj;
+	if (slab->free_list == NULL) {
+		// Allocate a new page
+		// Set free_list to first object and link
+		slab->free_list = __va(alloc_page());
+		for (uintptr_t offset = slab->obj_size; offset < PAGE_SIZE; offset += slab->obj_size) {
+			*(void **)(slab->free_list + offset - slab->obj_size) = slab->free_list + offset;
+		}
+		*(void **)(slab->free_list + PAGE_SIZE - slab->obj_size) = NULL;
+
+		// Update pageinfo
+		pageinfo_t *info = get_pageinfo(__pa(slab->free_list));
+		info->flags |= PAGEINFO_SLAB;
+		info->slab.owner = slab;
 	}
 
-	// Allocate a new page
-	// Set the free list to the second object and link
-	slab->free_list = __va(alloc_page()) + slab->obj_size;
-	for (uintptr_t offset = slab->obj_size; offset < PAGE_SIZE; offset += slab->obj_size) {
-		*(void **)(slab->free_list + offset - slab->obj_size) = slab->free_list + offset;
-	}
-	*(void **)(slab->free_list + PAGE_SIZE - slab->obj_size * 2) = NULL;
-
-	// Update pageinfo
-	pageinfo_t *info = get_pageinfo(__pa(slab->free_list));
-	info->flags |= PAGEINFO_SLAB;
-	info->slab_owner = slab;
-
-	// Return the first object
-	void *obj = slab->free_list - slab->obj_size;
-
+	// Reuse an object from the free list
+	void *obj = slab->free_list;
+	slab->free_list = *(void **)obj;
 	spin_release(&slab->lock);
 	return obj;
 }
@@ -95,5 +89,5 @@ void slab_free(void *obj) {
 	if (!(info->flags & PAGEINFO_SLAB))
 		panic("slab_free: invalid free on non-slab object %p", obj);
 
-	slab_free2(get_pageinfo(__pa(obj))->slab_owner, obj);
+	slab_free2(get_pageinfo(__pa(obj))->slab.owner, obj);
 }

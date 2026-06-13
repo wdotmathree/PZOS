@@ -37,7 +37,7 @@ static size_t cur_y = -1;
 
 static spinlock_t tty_lock = SPINLOCK_INITIALIZER;
 
-/* Forward declarations for locked helpers (caller must hold `tty_lock`). */
+// Forward declarations for locked helpers (caller must hold `tty_lock`).
 static void tty_putchar_locked(char c);
 static void tty_write_locked(const char *data, size_t size);
 

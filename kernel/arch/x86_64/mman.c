@@ -55,7 +55,7 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 		LOG("MMAN", "base=%p size=%p type=%s", entry->base, entry->length, MEM_TYPES[entry->type]);
 		if (entry->type == LIMINE_MEMMAP_USABLE || entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
 			mem_size += entry->length;
-			max_free = entry->base + entry->length - 1;
+			max_free = max(max_free, entry->base + entry->length - 1);
 		} else if (entry->type == LIMINE_MEMMAP_FRAMEBUFFER) {
 			// We only use the first framebuffer
 			if (framebuf_base == 0) {
@@ -287,36 +287,33 @@ void free_page(void *ptr) {
 	spin_release_irqrestore(&alloc_lock, flags);
 }
 
-/// TODO: Fix
 physaddr_t alloc_aligned(size_t npages, size_t align) {
 	if (npages == 0)
 		return 0;
 
 	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
 
-	// We always allocate from low memory so we can use the bitmap
-	uint64_t mask = 1;
-	for (size_t i = 0; i < bitmap_size * 8; i += align) {
-		size_t cnt = 0;
-		for (size_t j = i; cnt < npages; j++) {
-			if (bitmap[j / 64] & mask) {
-				if (++cnt == npages) {
-					// We found a contiguous block of pages
-					for (size_t k = i; k <= j; k++) {
-						bitmap[k / 64] &= ~(1ULL << (k % 64));
-					}
-
-					spin_release_irqrestore(&alloc_lock, flags);
-					return i * 0x1000;
-				}
-			} else {
-				i = j;
+	size_t max_page = LOWMEM_SIZE / 0x1000;
+	for (size_t start = 0; start + npages <= max_page; start += align) {
+		bool found = true;
+		for (size_t j = 0; j < npages; j++) {
+			size_t p = start + j;
+			if (!(bitmap[p / 64] & (1ULL << (p % 64)))) {
+				found = false;
 				break;
 			}
-			mask = (mask << 1) | (mask >> 63);
 		}
-		mask = (mask << (align)) | (mask >> (64 - align));
+		if (!found)
+			continue;
+
+		for (size_t j = 0; j < npages; j++) {
+			size_t p = start + j;
+			bitmap[p / 64] &= ~(1ULL << (p % 64));
+		}
+		spin_release_irqrestore(&alloc_lock, flags);
+		return start * 0x1000;
 	}
+
 	panic("alloc_aligned: Not enough contiguous pages available");
 }
 
@@ -333,6 +330,7 @@ void free_contig(void *ptr, size_t npages) {
 	size_t page_num = (uintptr_t)ptr / 0x1000;
 	for (size_t i = 0; i < npages; i++) {
 		bitmap[page_num / 64] |= (1ULL << (page_num % 64));
+		page_num++;
 	}
 
 	spin_release_irqrestore(&alloc_lock, flags);

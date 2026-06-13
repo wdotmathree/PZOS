@@ -56,7 +56,7 @@ void vmem_init(void) {
 	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
 	for (size_t i = 0; i < KERNEL_STACK_SIZE - PAGE_SIZE; i += PAGE_SIZE) {
 		void *page = (void *)(kernel_stack_bottom + i);
-		early_map(NULL, page, alloc_page(), MAP_SIZE_4K, PAGE_RW | PAGE_NX);
+		early_map(NULL, page, alloc_page(), MAP_SIZE_4K, PAGE_RW | PAGE_NX | PAGE_PRESENT);
 	}
 
 	// Set up the pageinfo VMA
