@@ -39,7 +39,8 @@ isr_frame_t *calibrate_tsc(isr_frame_t *const frame) {
 		asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
 		uint64_t elapsed = (((uint64_t)hi << 32) | lo) - tsc_freq;
 
-		tsc_freq = elapsed * 18.206507364908855; // Approximate frequency of the PIT
+		// Multiply by approximate frequency of the PIT (18.206507364908855)
+		tsc_freq = ((__uint128_t)elapsed * 0x91a6ed5555555736) >> 59;
 		_get_time = get_time_tsc;
 		LOG("TSC", "Detected CPU frequency: %llu MHz", tsc_freq / 1000000);
 	}

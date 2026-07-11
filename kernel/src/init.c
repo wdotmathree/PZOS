@@ -101,16 +101,6 @@ __attribute__((naked, noreturn)) void kinit(void) {
 		hcf();
 	}
 
-	// Enable SSE
-	asm volatile("mov rax, cr0\n\t"
-				 "and rax, -5\n\t" // -5 = 0xfb
-				 "or rax, 0x2\n\t"
-				 "mov cr0, rax\n\t"
-				 "mov rax, cr4\n\t"
-				 "or rax, 0x00040600\n\t"
-				 "mov cr4, rax"
-				 : : : "rax");
-
 	irq_init();
 
 	tty_dim_t tty_size = tty_init(framebuffer_request.response->framebuffers[0]);

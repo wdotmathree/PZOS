@@ -4,7 +4,7 @@ ASMSRCS := $(shell find . -name "*.asm")
 CSRCS := $(shell find . -name "*.c")
 
 ASFLAGS := -f elf64
-CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I./include -mno-red-zone -masm=intel
+CFLAGS := -std=gnu11 -Wall -Wextra -Wno-unused-parameter -I./include -mno-red-zone -masm=intel -mno-sse
 
 include arch/$(ARCH)/make.config
 

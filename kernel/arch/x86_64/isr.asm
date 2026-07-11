@@ -21,14 +21,10 @@ isr_stub:
 	push r15
 
 	mov rdi, rsp
-	sub rsp, 512
 	and rsp, -16
-	fxsave [rsp]
 
 	mov rax, [rdi + 15 * 8] ; Interrupt number
 	call [isr_vectors + rax * 8]
-
-	fxrstor [rsp]
 	mov rsp, rax
 
 	pop r15

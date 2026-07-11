@@ -23,14 +23,6 @@ void *memset(void *s, int c, size_t n) {
 void *memcpy(void *restrict dst, const void *restrict src, size_t n) {
 	char *d = dst;
 	const char *s = src;
-	while (n >= 16) {
-		asm("movups xmm0, [%0]\n\t"
-			"movups [%1], xmm0"
-			: : "r"(s), "r"(d) : "xmm0", "memory");
-		d += 16;
-		s += 16;
-		n -= 16;
-	}
 	while (n >= 8) {
 		*(size_t *)d = *(const size_t *)s;
 		n -= 8;
