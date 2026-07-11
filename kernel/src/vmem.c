@@ -42,33 +42,7 @@ static void free_vma(vma_list_t *vma) {
 	vma_free_list = vma;
 }
 
-void vmem_init(void) {
-	// Initialize the VMA list
-	vma_free_list = __va(alloc_page());
-	for (size_t i = 1; i < PAGE_SIZE / sizeof(vma_list_t); i++) {
-		vma_list_t *a = &vma_free_list[i - 1];
-		vma_list_t *b = &vma_free_list[i];
-		a->next = b;
-		b->prev = a;
-	}
-
-	// Finish setting up the BSP stack
-	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
-	for (size_t i = 0; i < KERNEL_STACK_SIZE - PAGE_SIZE; i += PAGE_SIZE) {
-		void *page = (void *)(kernel_stack_bottom + i);
-		early_map(NULL, page, alloc_page(), MAP_SIZE_4K, PAGE_RW | PAGE_NX | PAGE_PRESENT);
-	}
-
-	// Set up the pageinfo VMA
-	create_vma((void *)VMEM_PAGEINFO_BASE, VMEM_PAGEINFO_MAXSIZE, VMA_READ | VMA_WRITE | VMA_ZERO);
-
-	// Register the page fault handler
-	register_isr(14, page_fault_handler, 0);
-}
-
 void create_vma(void *base, size_t size, uint64_t flags) {
-	uint64_t prev_irq = spin_acquire_irqsave(&vma_lock);
-
 	vma_list_t *vma = alloc_vma();
 	vma->base = base;
 	vma->size = size;
@@ -94,13 +68,9 @@ void create_vma(void *base, size_t size, uint64_t flags) {
 		if (curr)
 			curr->prev = vma;
 	}
-
-	spin_release_irqrestore(&vma_lock, prev_irq);
 }
 
 void destroy_vma(vma_list_t *vma) {
-	uint64_t flags = spin_acquire_irqsave(&vma_lock);
-
 	if (vma->prev)
 		vma->prev->next = vma->next;
 	else
@@ -110,8 +80,30 @@ void destroy_vma(vma_list_t *vma) {
 		vma->next->prev = vma->prev;
 
 	free_vma(vma);
+}
 
-	spin_release_irqrestore(&vma_lock, flags);
+void vmem_init(void) {
+	// Initialize the VMA list
+	vma_free_list = __va(alloc_page());
+	for (size_t i = 1; i < PAGE_SIZE / sizeof(vma_list_t); i++) {
+		vma_list_t *a = &vma_free_list[i - 1];
+		vma_list_t *b = &vma_free_list[i];
+		a->next = b;
+		b->prev = a;
+	}
+
+	// Finish setting up the BSP stack
+	uintptr_t kernel_stack_bottom = VMEM_STACK_BASE - KERNEL_STACK_SIZE;
+	for (size_t i = 0; i < KERNEL_STACK_SIZE - PAGE_SIZE; i += PAGE_SIZE) {
+		void *page = (void *)(kernel_stack_bottom + i);
+		early_map(NULL, page, alloc_page(), MAP_SIZE_4K, PAGE_RW | PAGE_NX | PAGE_PRESENT);
+	}
+
+	// Set up the pageinfo VMA
+	create_vma((void *)VMEM_PAGEINFO_BASE, VMEM_PAGEINFO_MAXSIZE, VMA_READ | VMA_WRITE | VMA_ZERO);
+
+	// Register the page fault handler
+	register_isr(14, page_fault_handler, 0);
 }
 
 void *vmalloc_at(void *start, void *end, size_t npages, uint64_t flags) {
@@ -261,6 +253,12 @@ void vfree(void *addr, size_t npages) {
 		}
 	} else {
 		panic("vfree: Invalid free address");
+	}
+
+	// Unmap all mapped pages
+	for (size_t i = 0; i < npages; i++) {
+		if (is_mapped(addr + i * PAGE_SIZE))
+			unmap_page(addr);
 	}
 
 	spin_release_irqrestore(&vma_lock, flags);

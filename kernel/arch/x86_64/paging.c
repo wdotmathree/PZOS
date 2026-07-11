@@ -196,7 +196,7 @@ void unmap_page(const void *virt_addr) {
 		spin_release_irqrestore(&paging_lock, flags);
 		return;
 	}
-	free_page((void *)TABLE_ENTRY_ADDR(*pde));
+	free_page(TABLE_ENTRY_ADDR(*pde));
 	*pde = 0;
 	invlpg(pte);
 
@@ -204,7 +204,7 @@ void unmap_page(const void *virt_addr) {
 		spin_release_irqrestore(&paging_lock, flags);
 		return;
 	}
-	free_page((void *)TABLE_ENTRY_ADDR(*pdpte));
+	free_page(TABLE_ENTRY_ADDR(*pdpte));
 	*pdpte = 0;
 	invlpg(pde);
 
@@ -212,7 +212,7 @@ void unmap_page(const void *virt_addr) {
 		spin_release_irqrestore(&paging_lock, flags);
 		return;
 	}
-	free_page((void *)TABLE_ENTRY_ADDR(*pml4e));
+	free_page(TABLE_ENTRY_ADDR(*pml4e));
 	*pml4e = 0;
 	invlpg(pdpte);
 	spin_release_irqrestore(&paging_lock, flags);

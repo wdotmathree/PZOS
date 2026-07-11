@@ -52,8 +52,6 @@ typedef struct vma_list_t {
 } vma_list_t;
 
 void vmem_init(void);
-void create_vma(void *base, size_t size, uint64_t flags);
-void destroy_vma(vma_list_t *vma);
 
 // Allocates `npages` pages of demand paged virtual memory
 void *vmalloc(size_t npages, uint64_t flags);

@@ -40,7 +40,6 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	// Usable and bootloader reclaimable chunks are guaranteed to not overlap and are page aligned
 	size_t count = mmap->entry_count;
 	size_t max_addr = 0;
-	size_t max_free = 0;
 
 	uintptr_t framebuf_base = 0;
 	intptr_t framebuf_size = 0;
@@ -53,9 +52,8 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 	for (size_t i = 0; i < count; i++) {
 		struct limine_memmap_entry *entry = mmap->entries[i];
 		LOG("MMAN", "base=%p size=%p type=%s", entry->base, entry->length, MEM_TYPES[entry->type]);
-		if (entry->type == LIMINE_MEMMAP_USABLE || entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE) {
+		if (entry->type == LIMINE_MEMMAP_USABLE || entry->type == LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE || entry->type == LIMINE_MEMMAP_ACPI_RECLAIMABLE) {
 			mem_size += entry->length;
-			max_free = max(max_free, entry->base + entry->length - 1);
 		} else if (entry->type == LIMINE_MEMMAP_FRAMEBUFFER) {
 			// We only use the first framebuffer
 			if (framebuf_base == 0) {
@@ -63,13 +61,13 @@ void mman_init(struct limine_memmap_response *mmap, uint8_t **framebuf, uintptr_
 				framebuf_size = entry->length;
 			}
 		}
-		max_addr = entry->base + entry->length - 1;
+		max_addr = max(max_addr, entry->base + entry->length - 1);
 	}
 	LOG("MMAN", "Maximum addressable byte at %p", max_addr);
 	LOG("MMAN", "Usable memory size: %zu bytes (%zu pages)", mem_size, mem_size / 0x1000);
 
 	// Find candidates for low memory bitmap and high memory page stack
-	size_t reserve = ((max_free - LOWMEM_SIZE) / 0x1000 * sizeof(*page_stack) + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
+	size_t reserve = (mem_size / 0x1000 * sizeof(*page_stack) + bitmap_size + 0xfff) / 0x1000; // How many pages we reserve for the memory management stuff
 	for (size_t i = 0; i < count; i++) {
 		struct limine_memmap_entry *entry = mmap->entries[i];
 		if (entry->type == LIMINE_MEMMAP_USABLE) {
@@ -273,15 +271,17 @@ physaddr_t alloc_page(void) {
 	return ret;
 }
 
-void free_page(void *ptr) {
+void free_page(physaddr_t ptr) {
 	uint64_t flags = spin_acquire_irqsave(&alloc_lock);
 
 	size_t page_num = (uintptr_t)ptr / 0x1000;
 	if ((uintptr_t)ptr < LOWMEM_SIZE) {
 		// Free from bitmap
 		bitmap[page_num / 64] |= (1ULL << (page_num % 64));
-	} else {
+	} else if (page_stack >= page_stack_base) {
 		*++page_stack = page_num;
+	} else {
+		panic("free_page: invalid free");
 	}
 
 	spin_release_irqrestore(&alloc_lock, flags);
@@ -321,7 +321,7 @@ physaddr_t alloc_contig(size_t npages) {
 	return alloc_aligned(npages, 1);
 }
 
-void free_contig(void *ptr, size_t npages) {
+void free_contig(physaddr_t ptr, size_t npages) {
 	if (npages == 0 || ptr == NULL)
 		return;
 
