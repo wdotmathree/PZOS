@@ -111,7 +111,7 @@ __attribute__((naked, noreturn)) void kinit(void) {
 				 "mov cr4, rax"
 				 : : : "rax");
 
-	isr_init();
+	irq_init();
 
 	tty_dim_t tty_size = tty_init(framebuffer_request.response->framebuffers[0]);
 	serial_init();

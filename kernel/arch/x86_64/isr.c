@@ -40,7 +40,7 @@ static struct idt_entry idt[IDT_SIZE];
 
 isr_handler_t isr_vectors[IDT_SIZE];
 
-void isr_init(void) {
+void irq_init(void) {
 	// First deal with GDT stuff
 	struct {
 		uint16_t limit;

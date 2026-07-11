@@ -43,7 +43,7 @@ typedef struct {
 
 typedef isr_frame_t *(*isr_handler_t)(isr_frame_t *const);
 
-void isr_init(void);
+void irq_init(void);
 
 void register_isr(uint8_t num, isr_handler_t handler, uint8_t dpl);
 void unregister_isr(uint8_t num);
