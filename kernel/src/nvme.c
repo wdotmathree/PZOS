@@ -5,11 +5,44 @@
 #include <kernel/paging.h>
 #include <kernel/pci.h>
 
+typedef struct nvme_mmio_t {
+	uint64_t cap;
+	uint32_t vs;
+	uint32_t intms;
+	uint32_t intmc;
+	uint32_t cc;
+	uint8_t _res_0[0x1c - 0x18];
+	uint32_t csts;
+	uint32_t nssr;
+	uint32_t aqa;
+	uint64_t asq;
+	uint64_t acq;
+	uint32_t cmbloc;
+	uint32_t cmbsz;
+	uint32_t bpinfo;
+	uint32_t bprsel;
+	uint64_t bpmbl;
+	uint64_t cmbmsc;
+	uint32_t cmbsts;
+	uint32_t cmbebs;
+	uint32_t cmbswtp;
+	uint32_t nssd;
+	uint32_t nrto;
+	uint8_t _res_1[0xe00 - 0x6c];
+	uint32_t pmrcap;
+	uint32_t pmrctl;
+	uint32_t pmrsts;
+	uint32_t pmrebs;
+	uint32_t pmrswtp;
+	uint32_t pmrmscl;
+	uint32_t pmrmscu;
+} nvme_mmio_t;
+
 typedef struct nvme_queue_t {
 	uint16_t id;
 	uint16_t sq_size;
 	uint16_t cq_size;
-	void *doorbell_addr;
+	volatile uint32_t *doorbell_addr;
 	void *sq_buf;
 	void *cq_buf;
 	uint16_t sq_head;
@@ -17,8 +50,8 @@ typedef struct nvme_queue_t {
 } nvme_queue_t;
 
 typedef struct nvme_ctrl_t {
-	void *mmio_base;
-	uint16_t dstrd;
+	volatile nvme_mmio_t *mmio;
+	uint16_t dstrd; // Doorbell stride measured in DWORDS (not bytes)
 	nvme_queue_t admin_q;
 	nvme_queue_t io_q;
 	struct nvme_ctrl_t *next;
@@ -33,17 +66,17 @@ bool nvme_attach(pci_dev_t *dev) {
 	dev->header->command |= PCI_CMD_BUS_MASTER | PCI_CMD_MEM_SPACE;
 	dev->header->command &= ~PCI_CMD_INTERRUPT_DISABLE;
 	// Map BAR0
-	void *mmio_base = (void *)__va(((uint64_t)header->bar1 << 32) | (header->bar0 & ~0x0f));
-	map_page((void *)mmio_base, __pa(mmio_base), PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_UC));
-	LOG("NVMe", "Found NVMe controller at %02x:%02x.%x, MMIO base: %p", dev->bus, dev->device, dev->function, __pa(mmio_base));
+	volatile nvme_mmio_t *mmio = (void *)__va(((uint64_t)header->bar1 << 32) | (header->bar0 & ~0x0f));
+	map_page((void *)mmio, __pa(mmio), PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_UC));
+	LOG("NVMe", "Found NVMe controller at %02x:%02x.%x, MMIO base: %p", dev->bus, dev->device, dev->function, __pa(mmio));
 
 	// Initialize NVMe controller
 	nvme_ctrl_t *ctrl = kmalloc(sizeof(nvme_ctrl_t));
-	ctrl->mmio_base = mmio_base;
-	ctrl->dstrd = 1 << ((*(volatile uint64_t *)(mmio_base) >> 32) & 0x0f);
+	ctrl->mmio = mmio;
+	ctrl->dstrd = 1 << ((mmio->cap >> 32) & 0x0f); // We don't need the 2 + since a dword is already 4 bytes
 	// Reset the controller
-	*(volatile uint32_t *)(mmio_base + 0x14) &= ~0x1; // CC.EN = 0
-	while (*(volatile uint32_t *)(mmio_base + 0x1c) & 0x1); // Wait for CSTS.RDY = 0
+	mmio->cc &= ~0x1; // CC.EN = 0
+	while (mmio->csts & 0x01); // Wait for CSTS.RDY = 0
 
 	// Set up admin queue
 	ctrl->admin_q.id = 0;
@@ -51,37 +84,37 @@ bool nvme_attach(pci_dev_t *dev) {
 	ctrl->admin_q.cq_size = 64;
 	ctrl->admin_q.sq_buf = __va(alloc_page());
 	ctrl->admin_q.cq_buf = __va(alloc_page());
-	ctrl->admin_q.doorbell_addr = mmio_base + 0x1000;
+	ctrl->admin_q.doorbell_addr = (void *)mmio + 0x1000;
 	ctrl->admin_q.sq_head = 0;
 	ctrl->admin_q.cq_head = 0;
 	// Write attributes to controller
-	*(volatile uint32_t *)(mmio_base + 0x24) = ((ctrl->admin_q.cq_size - 1) << 16) | (ctrl->admin_q.sq_size - 1); // AQA
-	*(volatile uint64_t *)(mmio_base + 0x28) = __pa(ctrl->admin_q.cq_buf); // ASQ
-	*(volatile uint64_t *)(mmio_base + 0x30) = __pa(ctrl->admin_q.sq_buf); // ACQ
+	mmio->aqa = ((ctrl->admin_q.cq_size - 1) << 16) | (ctrl->admin_q.sq_size - 1);
+	mmio->asq = __pa(ctrl->admin_q.sq_buf);
+	mmio->acq = __pa(ctrl->admin_q.cq_buf);
 
 	// Configure controller command sets
 	// Other I/O command sets are not yet implemented
-	if (*(volatile uint64_t *)mmio_base & (1ULL << 44)) { // CAP.CSS.NOIOCSS
+	if (mmio->cap & (1ULL << 44)) { // CAP.CSS.NOIOCSS
 		// No I/O command set supported, abort
 		return false;
-	} else if (*(volatile uint64_t *)mmio_base & (1ULL << 43)) { // CAP.CSS.IOCSS
+	} else if (mmio->cap & (1ULL << 43)) { // CAP.CSS.IOCSS
 		// I/O command set supported, configure CC.CSS
-		*(volatile uint32_t *)(mmio_base + 0x14) = (*(volatile uint32_t *)(mmio_base + 0x14) & 0xffffff8f) | (0b110 << 4);
-	} else if (*(volatile uint64_t *)mmio_base & (1ULL << 42)) { // CAP.CSS.NCSS
+		mmio->cc = (mmio->cc & 0xffffff8f) | (0b110 << 4);
+	} else if (mmio->cap & (1ULL << 37)) { // CAP.CSS.NCSS
 		// NVMe command set supported, configure CC.CSS
-		*(volatile uint32_t *)(mmio_base + 0x14) = (*(volatile uint32_t *)(mmio_base + 0x14) & 0xffffff8f) | (0b000 << 4);
+		mmio->cc = (mmio->cc & 0xffffff8f) | (0b000 << 4);
 	} else {
 		// No supported command set, abort
 		return false;
 	}
 	// Set arbitration and page size
-	*(volatile uint32_t *)(mmio_base + 0x14) = (*(volatile uint32_t *)(mmio_base + 0x14) & 0xffffc7ff) | (0b000 << 11); // CC.AMS = Round Robin
-	*(volatile uint32_t *)(mmio_base + 0x14) = (*(volatile uint32_t *)(mmio_base + 0x14) & 0xfffff87f) | (0 << 7); // CC.MPS = 4KiB pages
+	mmio->cc = (mmio->cc & 0xffffc7ff) | (0b000 << 11); // CC.AMS = Round Robin
+	mmio->cc = (mmio->cc & 0xfffff87f) | (0 << 7); // CC.MPS = 4KiB pages
 
 	// Enable the controller
-	*(volatile uint32_t *)(mmio_base + 0x14) |= 0x1; // CC.EN = 1
-	while (!(*(volatile uint32_t *)(mmio_base + 0x1c) & 0b11)); // Wait for CSTS.RDY = 1 or CSTS.CFS = 1
-	if (*(volatile uint32_t *)(mmio_base + 0x1c) & 0b10) { // CSTS.CFS = 1
+	mmio->cc |= 0x1; // CC.EN = 1
+	while (!(mmio->csts & 0b11)); // Wait for CSTS.RDY = 1 or CSTS.CFS = 1
+	if (mmio->csts & 0b10) { // CSTS.CFS = 1
 		LOG("NVME", "Failed to enable NVMe controller at %02x:%02x.%x", dev->bus, dev->device, dev->function);
 		return false;
 	}
