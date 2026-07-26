@@ -74,7 +74,7 @@ bool nvme_attach(pci_dev_t *dev) {
 	// Setup controller struct
 	nvme_ctrl_t *ctrl = kmalloc(sizeof(nvme_ctrl_t));
 	ctrl->mmio = mmio;
-	ctrl->dstrd = 1 << ((mmio->cap >> 32) & 0x0f); // We don't need the 2 + since a dword is already 4 bytes
+	ctrl->dstrd = 1 << ((mmio->cap >> 32) & 0x0f); // We don't need the 2 + since uint32_t is already 4 bytes
 	ctrl->timeout = (mmio->cap >> 24) & 0xff;
 	// Reset the controller
 	mmio->cc &= ~0x1; // CC.EN = 0
@@ -115,9 +115,17 @@ bool nvme_attach(pci_dev_t *dev) {
 		LOG("NVMe", "%02x:%02x.%x: no supported command set, aborting", dev->bus, dev->device, dev->function);
 		return false;
 	}
+	// Check if host page size is supported
+	int mps = __builtin_ctz(PAGE_SIZE) - 12;
+	int mpsmax = ((mmio->cap >> 52) & 0x0f);
+	int mpsmin = ((mmio->cap >> 48) & 0x0f);
+	if (mps > mpsmax || mps < mpsmin) {
+		LOG("NVMe", "%02x:%02x.%x: host page size not supported, aborting", dev->bus, dev->device, dev->function);
+		return false;
+	}
 	// Set arbitration and page size
 	mmio->cc = (mmio->cc & 0xffffc7ff) | (0b000 << 11); // CC.AMS = Round Robin
-	mmio->cc = (mmio->cc & 0xfffff87f) | (0 << 7); // CC.MPS = 4KiB pages
+	mmio->cc = (mmio->cc & 0xfffff87f) | (mps << 7); // CC.MPS = Host page size
 
 	// Enable the controller
 	mmio->cc |= 0x1; // CC.EN = 1
