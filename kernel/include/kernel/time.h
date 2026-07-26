@@ -14,10 +14,10 @@ void time_init(void);
 
 /// TODO: Add RTC support, dates and wall time, and time zones :(
 
-extern void (*_get_time)(timeval_t *tv);
+// Return the number of microseconds since kernel entry
+extern uint64_t (*get_utime)(void);
 
-static inline void get_time(timeval_t *tv) {
-	_get_time(tv);
-}
+// Store the time since kernel entry in `tv`
+void get_time(timeval_t *tv);
 
 #endif

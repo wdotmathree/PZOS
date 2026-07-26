@@ -7,21 +7,25 @@
 
 #include <kernel/log.h>
 
-void get_time_default(timeval_t *tv) {
-	tv->secs = 0;
-	tv->usecs = 0;
+void get_time(timeval_t *tv) {
+	uint64_t utime = get_utime();
+	tv->secs = utime / 1000000;
+	tv->usecs = utime % 1000000;
 }
 
-void (*_get_time)(timeval_t *tv) = get_time_default;
+uint64_t get_utime_default(void) {
+	return 0;
+}
+
+uint64_t (*get_utime)(void) = get_utime_default;
 
 static uint64_t tsc_freq; // Hz
-uint64_t tsc_base; // Base TSC value when kernel was loaded
-void get_time_tsc(timeval_t *tv) {
+uint64_t tsc_base; // Base TSC value at kernel entry
+uint64_t get_utime_tsc(void) {
 	uint32_t lo, hi;
 	asm volatile("rdtsc" : "=a"(lo), "=d"(hi));
 	uint64_t tsc = (((uint64_t)hi << 32) | lo) - tsc_base;
-	tv->secs = tsc / tsc_freq;
-	tv->usecs = (tsc % tsc_freq) * 1000000 / tsc_freq;
+	return (__uint128_t)tsc * 1000000 / tsc_freq;
 }
 
 static int calibrate_state = 0;
@@ -41,7 +45,7 @@ isr_frame_t *calibrate_tsc(isr_frame_t *const frame) {
 
 		// Multiply by approximate frequency of the PIT (18.206507364908855)
 		tsc_freq = ((__uint128_t)elapsed * 0x91a6ed5555555736) >> 59;
-		_get_time = get_time_tsc;
+		get_utime = get_utime_tsc;
 		LOG("TSC", "Detected CPU frequency: %llu MHz", tsc_freq / 1000000);
 	}
 	outb(0x20, 0x20); // Send EOI
@@ -60,7 +64,7 @@ void time_init(void) {
 	if ((edx & (1 << 4)) == 0) {
 		// No TSC is available
 		LOG(NULL, "RDTSC not supported, using PIC for timekeeping.");
-		_get_time = get_time_tsc;
+		get_utime = get_utime_tsc;
 	}
 
 	// Check if TSC is invariant
@@ -80,7 +84,7 @@ void time_init(void) {
 
 	if (tsc_invariant) {
 		LOG("TSC", "Invariant TSC frequency: %llu MHz", tsc_freq);
-		_get_time = get_time_tsc;
+		get_utime = get_utime_tsc;
 	} else {
 		LOG("TSC", "TSC frequency is not available, using PIT to calibrate");
 

@@ -36,7 +36,7 @@ typedef struct nvme_mmio_t {
 	uint32_t pmrswtp;
 	uint32_t pmrmscl;
 	uint32_t pmrmscu;
-} nvme_mmio_t;
+} __attribute__((packed)) nvme_mmio_t;
 
 typedef struct nvme_queue_t {
 	uint16_t id;
@@ -52,6 +52,7 @@ typedef struct nvme_queue_t {
 typedef struct nvme_ctrl_t {
 	volatile nvme_mmio_t *mmio;
 	uint16_t dstrd; // Doorbell stride measured in DWORDS (not bytes)
+	uint8_t timeout; // 500 millisecond units
 	nvme_queue_t admin_q;
 	nvme_queue_t io_q;
 	struct nvme_ctrl_t *next;
@@ -70,13 +71,20 @@ bool nvme_attach(pci_dev_t *dev) {
 	map_page((void *)mmio, __pa(mmio), PAGE_RW | PAGE_NX | PAGE_TYPE(PAT_UC));
 	LOG("NVMe", "Found NVMe controller at %02x:%02x.%x, MMIO base: %p", dev->bus, dev->device, dev->function, __pa(mmio));
 
-	// Initialize NVMe controller
+	// Setup controller struct
 	nvme_ctrl_t *ctrl = kmalloc(sizeof(nvme_ctrl_t));
 	ctrl->mmio = mmio;
 	ctrl->dstrd = 1 << ((mmio->cap >> 32) & 0x0f); // We don't need the 2 + since a dword is already 4 bytes
+	ctrl->timeout = (mmio->cap >> 24) & 0xff;
 	// Reset the controller
 	mmio->cc &= ~0x1; // CC.EN = 0
-	while (mmio->csts & 0x01); // Wait for CSTS.RDY = 0
+	uint64_t start = get_utime();
+	uint64_t timeout = start + ctrl->timeout * 500000;
+	while (mmio->csts & 0x01 && get_utime() < timeout); // Wait for CSTS.RDY = 0
+	if (mmio->csts & 0x01) {
+		LOG("NVMe", "%02x:%02x.%x: timed out while waiting for controller reset", dev->bus, dev->device, dev->function);
+		return false;
+	}
 
 	// Set up admin queue
 	ctrl->admin_q.id = 0;
@@ -104,7 +112,7 @@ bool nvme_attach(pci_dev_t *dev) {
 		// NVMe command set supported, configure CC.CSS
 		mmio->cc = (mmio->cc & 0xffffff8f) | (0b000 << 4);
 	} else {
-		// No supported command set, abort
+		LOG("NVMe", "%02x:%02x.%x: no supported command set, aborting", dev->bus, dev->device, dev->function);
 		return false;
 	}
 	// Set arbitration and page size
@@ -113,9 +121,15 @@ bool nvme_attach(pci_dev_t *dev) {
 
 	// Enable the controller
 	mmio->cc |= 0x1; // CC.EN = 1
-	while (!(mmio->csts & 0b11)); // Wait for CSTS.RDY = 1 or CSTS.CFS = 1
+	start = get_utime();
+	timeout = start + ctrl->timeout * 500000;
+	while (!(mmio->csts & 0b11) && get_utime() < timeout); // Wait for CSTS.RDY = 1 or CSTS.CFS = 1
+	if (!(mmio->csts & 0b11)) {
+		LOG("NVMe", "%02x:%02x.%x: timed out while waiting for controller enable", dev->bus, dev->device, dev->function);
+		return false;
+	}
 	if (mmio->csts & 0b10) { // CSTS.CFS = 1
-		LOG("NVME", "Failed to enable NVMe controller at %02x:%02x.%x", dev->bus, dev->device, dev->function);
+		LOG("NVMe", "%02x:%02x.%x: failed to enable NVMe controller", dev->bus, dev->device, dev->function);
 		return false;
 	}
 
