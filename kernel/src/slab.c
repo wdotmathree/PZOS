@@ -4,8 +4,8 @@
 #include <kernel/pageinfo.h>
 #include <kernel/panic.h>
 
-// Min object size is calculated as 2^(SLAB_MIN_ORDER+3)
-#define SLAB_MIN_ORDER 0
+// Min object size is calculated as 2^SLAB_MIN_ORDER
+#define SLAB_MIN_ORDER 3
 
 static slabinfo_t global_slab = {
 	.obj_size = sizeof(slabinfo_t),
@@ -22,11 +22,11 @@ slabinfo_t *slab_create(size_t obj_size, const char *name) {
 	if (!slab)
 		return NULL;
 
-	if (obj_size < (1ULL << (SLAB_MIN_ORDER + 3))) {
+	if (obj_size < (1ULL << SLAB_MIN_ORDER)) {
 		slab->obj_size = 8;
 	} else if (obj_size & (obj_size - 1)) {
 		// Round up to the next power of two
-		size_t size = 1ULL << (SLAB_MIN_ORDER + 3);
+		size_t size = 1ULL << SLAB_MIN_ORDER;
 		while (size < obj_size) {
 			size <<= 1;
 		}
@@ -62,6 +62,7 @@ void *slab_alloc(slabinfo_t *slab) {
 	// Reuse an object from the free list
 	void *obj = slab->free_list;
 	slab->free_list = *(void **)obj;
+
 	spin_release(&slab->lock);
 	return obj;
 }
